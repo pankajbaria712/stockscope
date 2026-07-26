@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion';
-import { Menu, Search, SunMedium, MoonStar, ArrowRight } from 'lucide-react';
+import { Menu, Search, SunMedium, MoonStar, ArrowRight, UserCircle2, LogOut } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../Context/AuthContext';
 
 const navLinks = [
   { label: 'Home', to: '/' },
@@ -36,6 +37,8 @@ function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  const { isAuthenticated, user, logout } = useAuth();
+
   return (
     <motion.header
       initial={{ y: -24, opacity: 0 }}
@@ -68,13 +71,28 @@ function Navbar() {
           >
             {theme === 'dark' ? <SunMedium size={18} /> : <MoonStar size={18} />}
           </button>
-          <Link to="/login" className="text-button">
-            Login
-          </Link>
-          <Link to="/register" className="primary-button">
-            Get Started
-            <ArrowRight size={16} />
-          </Link>
+
+          {isAuthenticated ? (
+            <>
+              <Link to="/profile" className="icon-button" aria-label="Profile">
+                {user?.avatar ? <img src={user.avatar} alt="avatar" style={{ width: 20, height: 20, borderRadius: 12 }} /> : <UserCircle2 size={18} />}
+              </Link>
+              <button type="button" className="ghost-button" onClick={logout} aria-label="Sign out">
+                <LogOut size={18} />
+              </button>
+            </>
+          ) : (
+            <>
+              <Link to="/login" className="text-button">
+                Login
+              </Link>
+              <Link to="/register" className="primary-button">
+                Get Started
+                <ArrowRight size={16} />
+              </Link>
+            </>
+          )}
+
           <button className="mobile-toggle" type="button" aria-label="Open menu" onClick={() => setMenuOpen(!menuOpen)}>
             <Menu size={20} />
           </button>

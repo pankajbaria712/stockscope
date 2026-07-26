@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import Loader from '../Components/Loader';
+import ProtectedRoute from '../Components/ProtectedRoute';
 import AuthLayout from '../layouts/AuthLayout';
 import PublicLayout from '../layouts/PublicLayout';
 
@@ -26,20 +27,26 @@ function AppRoutes() {
           <Route path="/" element={<HomePage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/company/:symbol" element={<CompanyDetailsPage />} />
-          <Route path="/compare" element={<ComparePage />} />
-          <Route path="/watchlist" element={<WatchlistPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
           <Route path="/terms-of-service" element={<TermsOfServicePage />} />
-          <Route path="*" element={<NotFoundPage />} />
+        </Route>
+
+        <Route element={<ProtectedRoute />}>
+          <Route element={<PublicLayout />}>
+            <Route path="/compare" element={<ComparePage />} />
+            <Route path="/watchlist" element={<WatchlistPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+          </Route>
         </Route>
 
         <Route element={<AuthLayout />}>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
         </Route>
+
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
   );

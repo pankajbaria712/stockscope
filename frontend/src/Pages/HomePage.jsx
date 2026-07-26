@@ -1,4 +1,3 @@
-import Navbar from '../Components/Navbar';
 import Hero from '../Components/Hero';
 import MarketOverview from '../Components/MarketOverview';
 import TrendingStocks from '../Components/TrendingStocks';
@@ -11,7 +10,6 @@ import Footer from '../Components/Footer';
 function HomePage() {
   return (
     <>
-      <Navbar />
       <main className="landing-page">
         <Hero />
         <MarketOverview />
