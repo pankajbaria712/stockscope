@@ -24,8 +24,7 @@ function Navbar() {
     >
       <div className="navbar__inner">
         <Link to="/" className="brand">
-          <span className="brand__mark">S</span>
-          <span className="brand__text">StockScope</span>
+          <img src="/logo.png" alt="StockScope logo" className="brand__logo" />
         </Link>
 
         <nav className="navbar__links" aria-label="Primary navigation">
