@@ -1,12 +1,12 @@
 import { motion } from 'framer-motion';
-import { Menu, Search, SunMedium, MoonStar, ArrowRight, UserCircle2, LogOut } from 'lucide-react';
+import { Menu, Search, ArrowRight, UserCircle2, LogOut } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../Context/AuthContext';
+import ThemeToggle from './ThemeToggle';
 
 const navLinks = [
   { label: 'Home', to: '/' },
-  { label: 'Features', to: '/about' },
   { label: 'Markets', to: '/search' },
   { label: 'Compare', to: '/compare' },
   { label: 'About', to: '/about' },
@@ -14,7 +14,6 @@ const navLinks = [
 
 function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [theme, setTheme] = useState('dark');
   const [showNavbar, setShowNavbar] = useState(true);
 
   useEffect(() => {
@@ -63,14 +62,7 @@ function Navbar() {
           <button className="icon-button" type="button" aria-label="Search companies">
             <Search size={18} />
           </button>
-          <button
-            className="icon-button"
-            type="button"
-            aria-label="Toggle theme"
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          >
-            {theme === 'dark' ? <SunMedium size={18} /> : <MoonStar size={18} />}
-          </button>
+          <ThemeToggle />
 
           {isAuthenticated ? (
             <>
