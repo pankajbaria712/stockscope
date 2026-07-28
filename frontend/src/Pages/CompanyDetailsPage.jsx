@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import PageShell from '../Components/PageShell';
 import Loader from '../Components/Loader';
-import StockChart from '../Components/charts/StockChart';
+import StockCandlestickChart from '../Components/charts/StockCandlestickChart';
 import { getCompanyDetails, getStockChart, getStockQuote } from '../Services/stockService';
 
 const RANGE_OPTIONS = [
@@ -23,7 +23,10 @@ function CompanyDetailsPage() {
   const [chartData, setChartData] = useState([]);
   const [range, setRange] = useState(RANGE_OPTIONS[2]);
   const [loading, setLoading] = useState(true);
+  const [chartLoading, setChartLoading] = useState(false);
   const [error, setError] = useState('');
+  const activeRequestRef = useRef(0);
+  const previousSymbolRef = useRef(symbol);
 
   const normalizedDetails = useMemo(() => {
     if (!details) {
@@ -61,14 +64,22 @@ function CompanyDetailsPage() {
         setChartData([]);
         setError('');
         setLoading(false);
+        setChartLoading(false);
         return;
       }
 
+      const requestId = activeRequestRef.current + 1;
+      activeRequestRef.current = requestId;
+      const shouldResetChartData = previousSymbolRef.current !== symbol;
+      previousSymbolRef.current = symbol;
       setLoading(true);
       setError('');
       setDetails(null);
       setQuote(null);
-      setChartData([]);
+      if (shouldResetChartData) {
+        setChartData([]);
+      }
+      setChartLoading(true);
 
       try {
         const [companyResponse, quoteResponse, chartResponse] = await Promise.all([
@@ -77,18 +88,63 @@ function CompanyDetailsPage() {
           getStockChart(symbol, { range: range.range }),
         ]);
 
+        if (activeRequestRef.current !== requestId) {
+          return;
+        }
+
         setDetails(companyResponse?.data || null);
         setQuote(quoteResponse?.data || null);
         setChartData(chartResponse?.data?.data || []);
       } catch (stockError) {
+        if (activeRequestRef.current !== requestId) {
+          return;
+        }
+
         setError(stockError?.response?.data?.message || stockError?.message || 'Unable to load company data.');
       } finally {
-        setLoading(false);
+        if (activeRequestRef.current === requestId) {
+          setLoading(false);
+          setChartLoading(false);
+        }
       }
     }
 
     loadCompany();
+
+    return () => {
+      activeRequestRef.current += 1;
+    };
   }, [range, symbol]);
+
+  const chartSummary = useMemo(() => {
+    if (!chartData.length) {
+      return null;
+    }
+
+    const latest = chartData[chartData.length - 1];
+    const previous = chartData[chartData.length - 2];
+    const change = latest.close - previous?.close;
+    const changePercent = previous?.close ? (change / previous.close) * 100 : 0;
+
+    return {
+      latestPrice: latest.close,
+      change,
+      changePercent,
+      open: latest.open,
+      high: Math.max(...chartData.map((item) => item.high)),
+      low: Math.min(...chartData.map((item) => item.low)),
+      previousClose: previous?.close ?? latest.open,
+      volume: latest.volume || 0,
+    };
+  }, [chartData]);
+
+  const chartStatusText = useMemo(() => {
+    if (!normalizedQuote?.market_status) {
+      return 'Market status unavailable';
+    }
+
+    return normalizedQuote.market_status;
+  }, [normalizedQuote]);
 
   if (loading) {
     return (
@@ -173,8 +229,47 @@ function CompanyDetailsPage() {
               </div>
             </div>
 
+            <div className="stock-chart-summary-grid">
+              <div className="stock-metric-card">
+                <span className="metric-label">Current price</span>
+                <strong>{chartSummary?.latestPrice != null ? `$${chartSummary.latestPrice.toFixed(2)}` : 'N/A'}</strong>
+              </div>
+              <div className="stock-metric-card">
+                <span className="metric-label">Today's change</span>
+                <strong className={chartSummary?.change >= 0 ? 'positive-value' : 'negative-value'}>{chartSummary?.change != null ? `${chartSummary.change >= 0 ? '+' : ''}${chartSummary.change.toFixed(2)}` : 'N/A'}</strong>
+              </div>
+              <div className="stock-metric-card">
+                <span className="metric-label">% change</span>
+                <strong className={chartSummary?.changePercent >= 0 ? 'positive-value' : 'negative-value'}>{chartSummary?.changePercent != null ? `${chartSummary.changePercent >= 0 ? '+' : ''}${chartSummary.changePercent.toFixed(2)}%` : 'N/A'}</strong>
+              </div>
+              <div className="stock-metric-card">
+                <span className="metric-label">Open</span>
+                <strong>{chartSummary?.open != null ? `$${chartSummary.open.toFixed(2)}` : 'N/A'}</strong>
+              </div>
+              <div className="stock-metric-card">
+                <span className="metric-label">High</span>
+                <strong>{chartSummary?.high != null ? `$${chartSummary.high.toFixed(2)}` : 'N/A'}</strong>
+              </div>
+              <div className="stock-metric-card">
+                <span className="metric-label">Low</span>
+                <strong>{chartSummary?.low != null ? `$${chartSummary.low.toFixed(2)}` : 'N/A'}</strong>
+              </div>
+              <div className="stock-metric-card">
+                <span className="metric-label">Previous close</span>
+                <strong>{chartSummary?.previousClose != null ? `$${chartSummary.previousClose.toFixed(2)}` : 'N/A'}</strong>
+              </div>
+              <div className="stock-metric-card">
+                <span className="metric-label">Volume</span>
+                <strong>{chartSummary?.volume ? chartSummary.volume.toLocaleString() : 'N/A'}</strong>
+              </div>
+              <div className="stock-metric-card">
+                <span className="metric-label">Market status</span>
+                <strong>{chartStatusText}</strong>
+              </div>
+            </div>
+
             <div className="stock-chart-card">
-              <StockChart data={chartData} symbol={normalizedDetails.symbol} />
+              <StockCandlestickChart data={chartData} symbol={normalizedDetails.symbol} isLoading={chartLoading} error={error} />
             </div>
           </section>
         </>

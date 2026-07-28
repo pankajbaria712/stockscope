@@ -23,6 +23,40 @@ function normalizeRange(range) {
   return rangeMap[value] || '1mo';
 }
 
+function buildHistoricalRequestConfig(range) {
+  const normalizedRange = String(range || '1M').trim().toUpperCase();
+  const now = Math.floor(Date.now() / 1000);
+  const daysAgo = {
+    '1D': 1,
+    '5D': 5,
+    '1M': 30,
+    '3M': 90,
+    '6M': 180,
+    '1Y': 365,
+    '5Y': 1825,
+    MAX: 3650,
+  };
+  const intervalMap = {
+    '1D': '5m',
+    '5D': '15m',
+    '1M': '1d',
+    '3M': '1d',
+    '6M': '1d',
+    '1Y': '1d',
+    '5Y': '1wk',
+    MAX: '1mo',
+  };
+
+  const periodDays = daysAgo[normalizedRange] || daysAgo['1M'];
+  const interval = intervalMap[normalizedRange] || intervalMap['1M'];
+
+  return {
+    period1: now - (periodDays * 24 * 60 * 60),
+    period2: now,
+    interval,
+  };
+}
+
 function normalizeInterval(interval) {
   const normalized = String(interval || '1M').trim().toUpperCase();
   const intervalMap = {
@@ -238,13 +272,25 @@ function transformQuoteResponse(payload) {
 function transformChartResponse(payload) {
   const bars = Array.isArray(payload) ? payload : [];
 
-  return bars.map((bar) => ({
-    time: bar.date ? Math.floor(new Date(bar.date).getTime() / 1000) : null,
-    open: Number(bar.open) || 0,
-    high: Number(bar.high) || 0,
-    low: Number(bar.low) || 0,
-    close: Number(bar.close) || 0,
-  })).filter((bar) => bar.time !== null);
+  return bars.map((bar) => {
+    const rawTime = bar.time ?? bar.timestamp ?? bar.date ?? bar.datetime;
+    const time = rawTime instanceof Date
+      ? Math.floor(rawTime.getTime() / 1000)
+      : typeof rawTime === 'number'
+        ? rawTime
+        : rawTime
+          ? Math.floor(new Date(rawTime).getTime() / 1000)
+          : null;
+
+    return {
+      time,
+      open: Number(bar.open) || 0,
+      high: Number(bar.high) || 0,
+      low: Number(bar.low) || 0,
+      close: Number(bar.close) || 0,
+      volume: Number(bar.volume ?? bar.adjVolume ?? 0) || 0,
+    };
+  }).filter((bar) => bar.time !== null);
 }
 
 function getYahooError(error) {
@@ -422,7 +468,7 @@ async function getStockQuote(symbol) {
   }
 }
 
-function buildFallbackChartData(symbol, range) {
+function buildFallbackChartData(symbol) {
   const fallbackPointCount = 24;
   const now = Date.now();
   const basePrice = getFallbackStockEntry(symbol)?.currentPrice || 100;
@@ -441,37 +487,38 @@ function buildFallbackChartData(symbol, range) {
       high,
       low,
       close,
+      volume: 8000000 + index * 200000,
     };
   });
 }
 
 async function getStockChart(symbol, options = {}) {
   const normalizedSymbol = normalizeSymbol(symbol);
-  const range = normalizeRange(options.range || options.interval || '1M');
+  const requestedRange = String(options.range || options.interval || '1M').trim().toUpperCase();
+  const range = normalizeRange(requestedRange);
 
   if (!normalizedSymbol) {
     throw new AppError('Please provide a stock symbol', 400);
   }
 
   try {
-    const history = await yahooFinance.historical(normalizedSymbol, {
-      period1: Math.floor((Date.now() - (365 * 24 * 60 * 60 * 1000)) / 1000),
-      period2: Math.floor(Date.now() / 1000),
-      interval: '1d',
-    });
+    const requestConfig = buildHistoricalRequestConfig(requestedRange);
+    const history = await yahooFinance.historical(normalizedSymbol, requestConfig);
 
-    const bars = history.slice(-60).map((entry) => ({
+    const bars = Array.isArray(history) ? history : [];
+    const transformedBars = transformChartResponse(bars.map((entry) => ({
       date: entry.date,
       open: entry.open,
       high: entry.high,
       low: entry.low,
       close: entry.close,
-    }));
+      volume: entry.volume,
+    })));
 
     return {
       symbol: normalizedSymbol,
-      range,
-      data: transformChartResponse(bars),
+      range: requestedRange,
+      data: transformedBars,
     };
   } catch (error) {
     if (error instanceof AppError && error.statusCode !== 502 && error.statusCode !== 503 && error.statusCode !== 429) {
@@ -480,8 +527,8 @@ async function getStockChart(symbol, options = {}) {
 
     return {
       symbol: normalizedSymbol,
-      range,
-      data: buildFallbackChartData(normalizedSymbol, range),
+      range: requestedRange,
+      data: buildFallbackChartData(normalizedSymbol),
     };
   }
 }
@@ -490,6 +537,7 @@ module.exports = {
   normalizeSymbol,
   normalizeRange,
   normalizeInterval,
+  buildHistoricalRequestConfig,
   buildStockErrorPayload,
   transformSearchResponse,
   normalizeSearchPayload,
