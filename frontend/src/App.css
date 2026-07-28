@@ -1054,6 +1054,248 @@ html.light .mobile-menu {
   margin-bottom: 1rem;
 }
 
+.company-details-card {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.company-header {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.company-header-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) auto;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.company-header-main {
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+}
+
+.company-logo-shell {
+  min-width: 5rem;
+  min-height: 5rem;
+  display: grid;
+  place-items: center;
+  border-radius: 1.3rem;
+  background: rgba(34, 211, 238, 0.12);
+  border: 1px solid rgba(34, 211, 238, 0.2);
+  overflow: hidden;
+}
+
+.company-logo-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.company-logo-fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  font-weight: 700;
+  font-size: 1.35rem;
+  color: var(--text-primary);
+}
+
+.company-header-info {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.company-header-title {
+  margin: 0;
+  font-size: clamp(2rem, 2.4vw, 2.75rem);
+  line-height: 1.05;
+}
+
+.company-header-subtitle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  color: var(--text-muted);
+  font-size: 0.97rem;
+}
+
+.company-header-actions {
+  display: grid;
+  gap: 0.85rem;
+  justify-content: end;
+}
+
+.company-header__button {
+  min-width: 11rem;
+}
+
+.company-price-panel {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.company-price-card {
+  display: grid;
+  gap: 0.45rem;
+  padding: 1.15rem;
+  border-radius: 1rem;
+  background: var(--card-bg-soft);
+  border: 1px solid var(--border-color);
+}
+
+.company-price-card span {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.company-price-card strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: 1.2rem;
+}
+
+.market-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.market-badge--live {
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(16, 185, 129, 0.24);
+}
+
+.market-badge--closed {
+  background: rgba(244, 63, 94, 0.12);
+  border-color: rgba(244, 63, 94, 0.22);
+}
+
+.market-dot,
+.market-dot--closed {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 999px;
+  background: #34d399;
+}
+
+.market-dot--closed {
+  background: #f87171;
+}
+
+.company-quickstats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.stat-card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1.1rem 1rem;
+  border-radius: 1.2rem;
+  background: var(--card-bg-soft);
+  border: 1px solid var(--border-color);
+  transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(34, 211, 238, 0.35);
+}
+
+.stat-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.95rem;
+  background: rgba(34, 211, 238, 0.12);
+  color: var(--text-primary);
+}
+
+.stat-card__label {
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+
+.stat-card__value {
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.company-description {
+  display: grid;
+  gap: 1rem;
+  padding: 1.2rem 1rem;
+  border-radius: 1rem;
+  background: var(--card-bg-soft);
+  border: 1px solid var(--border-color);
+}
+
+.company-description__text {
+  max-height: 5.2rem;
+  overflow: hidden;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  transition: max-height 0.3s ease;
+}
+
+.company-description__text.expanded {
+  max-height: 18rem;
+}
+
+.company-description-toggle {
+  width: fit-content;
+  padding: 0.7rem 1rem;
+}
+
+@media (max-width: 1024px) {
+  .company-header-top {
+    grid-template-columns: 1fr;
+  }
+
+  .company-header-actions {
+    justify-content: stretch;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .company-price-panel,
+  .company-quickstats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .company-price-panel,
+  .company-quickstats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .company-header-main {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .company-header-actions {
+    gap: 0.65rem;
+  }
+
+  .company-header__button {
+    width: 100%;
+  }
+}
+
 .stock-candlestick-shell {
   position: relative;
   min-height: 420px;

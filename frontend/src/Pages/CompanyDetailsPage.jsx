@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import PageShell from '../Components/PageShell';
 import Loader from '../Components/Loader';
 import StockCandlestickChart from '../Components/charts/StockCandlestickChart';
+import CompanyHeader from '../Components/CompanyHeader';
 import { getCompanyDetails, getStockChart, getStockQuote } from '../Services/stockService';
 
 const RANGE_OPTIONS = [
@@ -25,6 +26,7 @@ function CompanyDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [chartLoading, setChartLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isWatchlisted, setIsWatchlisted] = useState(false);
   const activeRequestRef = useRef(0);
   const previousSymbolRef = useRef(symbol);
 
@@ -45,16 +47,24 @@ function CompanyDetailsPage() {
     }
 
     return {
-      price: quote.currentPrice ?? quote.price ?? null,
+      symbol: quote.symbol || normalizedDetails?.symbol || symbol,
+      currentPrice: quote.currentPrice ?? quote.price ?? null,
       change: quote.change ?? null,
-      previous_close: quote.previousClose ?? quote.previous_close ?? null,
+      changePercent: quote.changePercent ?? null,
+      previousClose: quote.previousClose ?? quote.previous_close ?? null,
       volume: quote.volume ?? null,
       open: quote.open ?? null,
       high: quote.high ?? null,
       low: quote.low ?? null,
-      market_status: quote.marketState ?? quote.market_status ?? 'Unknown',
+      marketState: quote.marketState ?? quote.market_status ?? 'Unknown',
+      currency: quote.currency || normalizedDetails?.currency || 'USD',
+      lastUpdated: quote.lastUpdated ?? new Date().toISOString(),
+      peRatio: quote.peRatio ?? null,
+      fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh ?? null,
+      fiftyTwoWeekLow: quote.fiftyTwoWeekLow ?? null,
+      averageVolume: quote.averageVolume ?? null,
     };
-  }, [quote]);
+  }, [quote, normalizedDetails, symbol]);
 
   useEffect(() => {
     async function loadCompany() {
@@ -139,11 +149,11 @@ function CompanyDetailsPage() {
   }, [chartData]);
 
   const chartStatusText = useMemo(() => {
-    if (!normalizedQuote?.market_status) {
+    if (!normalizedQuote?.marketState) {
       return 'Market status unavailable';
     }
 
-    return normalizedQuote.market_status;
+    return normalizedQuote.marketState;
   }, [normalizedQuote]);
 
   if (loading) {
@@ -154,64 +164,30 @@ function CompanyDetailsPage() {
     );
   }
 
+  const handleToggleWatchlist = () => {
+    setIsWatchlisted((current) => !current);
+  };
+
+  const handleOpenChart = () => {
+    const chartSection = document.getElementById('company-chart-section');
+    if (chartSection) {
+      chartSection.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <PageShell title="Company Details" heading={normalizedDetails?.name || symbol} description="Inspect a single company with rich details and supporting market context." badge="Insights">
       {error ? <div className="stock-error-banner">{error}</div> : null}
       {!error && normalizedDetails ? (
         <>
-          <section className="info-card stock-detail-card">
-            <div className="stock-detail-header">
-              <div>
-                <p className="section-eyebrow">Market overview</p>
-                <h2>{normalizedDetails.name}</h2>
-                <p className="stock-detail-subtitle">{normalizedDetails.symbol} • {normalizedDetails.exchange || 'Unknown exchange'}</p>
-              </div>
-              <div className="stock-logo-placeholder">{normalizedDetails.symbol?.slice(0, 2) || 'ST'}</div>
-            </div>
-
-            <div className="stock-metrics-grid">
-              <div className="stock-metric-card">
-                <span className="metric-label">Current price</span>
-                <strong>{normalizedQuote?.price != null ? `$${normalizedQuote.price.toFixed(2)}` : 'N/A'}</strong>
-              </div>
-              <div className="stock-metric-card">
-                <span className="metric-label">Today's change</span>
-                <strong>{normalizedQuote?.change != null ? `${normalizedQuote.change.toFixed(2)}` : 'N/A'}</strong>
-              </div>
-              <div className="stock-metric-card">
-                <span className="metric-label">Previous close</span>
-                <strong>{normalizedQuote?.previous_close != null ? `$${normalizedQuote.previous_close.toFixed(2)}` : 'N/A'}</strong>
-              </div>
-              <div className="stock-metric-card">
-                <span className="metric-label">Volume</span>
-                <strong>{normalizedQuote?.volume != null ? normalizedQuote.volume.toLocaleString() : 'N/A'}</strong>
-              </div>
-            </div>
-
-            <div className="stock-detail-grid">
-              <div className="stock-detail-section">
-                <h3>Company profile</h3>
-                <p>{normalizedDetails.description || 'No company description is available yet.'}</p>
-                <ul className="stock-detail-list">
-                  <li><span>Industry</span><strong>{normalizedDetails.industry || 'N/A'}</strong></li>
-                  <li><span>Sector</span><strong>{normalizedDetails.sector || 'N/A'}</strong></li>
-                  <li><span>Currency</span><strong>{normalizedDetails.currency || 'N/A'}</strong></li>
-                  <li><span>Country</span><strong>{normalizedDetails.country || 'N/A'}</strong></li>
-                  <li><span>Website</span><strong>{normalizedDetails.website ? <a href={normalizedDetails.website} target="_blank" rel="noreferrer">Visit</a> : 'N/A'}</strong></li>
-                </ul>
-              </div>
-              <div className="stock-detail-section">
-                <h3>Market snapshot</h3>
-                <ul className="stock-detail-list">
-                  <li><span>Symbol</span><strong>{normalizedDetails.symbol}</strong></li>
-                  <li><span>Exchange</span><strong>{normalizedDetails.exchange || 'N/A'}</strong></li>
-                  <li><span>Open</span><strong>{normalizedQuote?.open != null ? `$${normalizedQuote.open.toFixed(2)}` : 'N/A'}</strong></li>
-                  <li><span>High</span><strong>{normalizedQuote?.high != null ? `$${normalizedQuote.high.toFixed(2)}` : 'N/A'}</strong></li>
-                  <li><span>Low</span><strong>{normalizedQuote?.low != null ? `$${normalizedQuote.low.toFixed(2)}` : 'N/A'}</strong></li>
-                  <li><span>Market status</span><strong>{normalizedQuote?.market_status || normalizedDetails.market_status || 'Unknown'}</strong></li>
-                </ul>
-              </div>
-            </div>
+          <section className="company-details-card info-card stock-detail-card">
+            <CompanyHeader
+              details={normalizedDetails}
+              quote={normalizedQuote}
+              isWatchlisted={isWatchlisted}
+              onToggleWatchlist={handleToggleWatchlist}
+              onOpenChart={handleOpenChart}
+            />
           </section>
 
           <section className="info-card">
@@ -268,7 +244,7 @@ function CompanyDetailsPage() {
               </div>
             </div>
 
-            <div className="stock-chart-card">
+            <div className="stock-chart-card" id="company-chart-section">
               <StockCandlestickChart data={chartData} symbol={normalizedDetails.symbol} isLoading={chartLoading} error={error} />
             </div>
           </section>
