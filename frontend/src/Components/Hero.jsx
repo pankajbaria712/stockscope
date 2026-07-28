@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { ArrowRight, Play, TrendingUp, ShieldCheck, BarChart3 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import HeroChart from './charts/HeroChart';
 
 function formatCurrency(value) {
   if (value === null || value === undefined) {
@@ -78,7 +79,13 @@ function Hero({ loading, error, heroData }) {
                   {loading ? '—' : formatPercent(nifty?.changePercent)}
                 </div>
               </div>
-              <div className="chart-placeholder" />
+              <div className="chart-placeholder h-[180px] md:h-[220px] rounded-[1rem] overflow-hidden">
+                {loading ? (
+                  <div className="flex h-full items-center justify-center text-sm text-slate-400">Loading chart…</div>
+                ) : (
+                  <HeroChart data={heroData?.chart} />
+                )}
+              </div>
             </div>
 
             <div className="glass-card hero-card hero-card--side">

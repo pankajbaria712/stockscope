@@ -124,6 +124,47 @@ async function fetchQuote(symbol) {
   }
 }
 
+function normalizeHistoricalData(history = []) {
+  return Array.isArray(history)
+    ? history
+        .map((entry) => {
+          if (!entry || !entry.date || entry.close === undefined || entry.close === null) {
+            return null;
+          }
+
+          const date = new Date(entry.date);
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          return {
+            time: `${year}-${month}-${day}`,
+            value: Number(entry.close),
+          };
+        })
+        .filter(Boolean)
+    : [];
+}
+
+async function fetchHistoricalData(symbol, periodDays = 30) {
+  if (!symbol) {
+    return [];
+  }
+
+  try {
+    const period1 = Math.floor((Date.now() - periodDays * 24 * 60 * 60 * 1000) / 1000);
+    const period2 = Math.floor(Date.now() / 1000);
+    const history = await yahooFinance.historical(symbol, {
+      period1,
+      period2,
+      interval: '1d',
+    });
+
+    return normalizeHistoricalData(history.slice(-periodDays));
+  } catch (error) {
+    return [];
+  }
+}
+
 async function fetchQuoteSummary(symbol) {
   if (!symbol) {
     return null;
@@ -185,12 +226,14 @@ async function getHomeOverview() {
     };
   });
 
+  const niftyQuote = overview.find((item) => item.symbol === '^NSEI') || null;
   const hero = {
-    nifty: overview.find((item) => item.symbol === '^NSEI') || null,
+    nifty: niftyQuote,
     sensex: overview.find((item) => item.symbol === '^BSESN') || null,
     bankNifty: overview.find((item) => item.symbol === '^NSEBANK') || null,
-    marketStatus: overview.find((item) => item.symbol === '^NSEI')?.marketStatus || 'Market Closed',
-    lastUpdated: overview.find((item) => item.symbol === '^NSEI')?.lastUpdated || null,
+    marketStatus: niftyQuote?.marketStatus || 'Market Closed',
+    lastUpdated: niftyQuote?.lastUpdated || null,
+    chart: await fetchHistoricalData('^NSEI', 30),
   };
 
   const payload = {
