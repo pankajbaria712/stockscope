@@ -1,6 +1,8 @@
+import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { BookmarkPlus } from 'lucide-react';
 import SectionHeading from './UI/SectionHeading';
+import LiveValue from './LiveValue';
 
 function formatMarketCap(value) {
   if (value === null || value === undefined) {
@@ -69,7 +71,17 @@ function PopularCompanies({ loading, companies = [] }) {
                 </div>
                 <div>
                   <span>Price</span>
-                  <strong>{isPlaceholder ? '—' : formatCurrency(company.currentPrice)}</strong>
+                  <strong>
+                    {isPlaceholder ? '—' : (
+                      <LiveValue
+                        value={company.currentPrice}
+                        format={formatCurrency}
+                        showIcon
+                        positive={company.change >= 0}
+                        className="company-price"
+                      />
+                    )}
+                  </strong>
                 </div>
               </div>
               <p className="company-description">{isPlaceholder ? 'Fetching company insights from premium market sources.' : company.description}</p>
@@ -81,4 +93,4 @@ function PopularCompanies({ loading, companies = [] }) {
   );
 }
 
-export default PopularCompanies;
+export default memo(PopularCompanies);

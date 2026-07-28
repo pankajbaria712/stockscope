@@ -1,7 +1,9 @@
+import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowUpRight, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SectionHeading from './UI/SectionHeading';
+import LiveValue from './LiveValue';
 
 function formatCurrency(value) {
   if (value === null || value === undefined) {
@@ -63,10 +65,28 @@ function TrendingStocks({ loading, stocks = [] }) {
               <div className="stock-card__footer">
                 <div>
                   <p className="metric-label">Price</p>
-                  <strong>{isPlaceholder ? '—' : formatCurrency(stock.currentPrice)}</strong>
+                  <strong>
+                    {isPlaceholder ? '—' : (
+                      <LiveValue
+                        value={stock.currentPrice}
+                        format={formatCurrency}
+                        showIcon
+                        positive={stock.change >= 0}
+                        className="stock-price"
+                      />
+                    )}
+                  </strong>
                 </div>
                 <div className={positive ? 'market-change market-change--up' : 'market-change market-change--down'}>
-                  {isPlaceholder ? '—' : formatPercent(stock.changePercent)}
+                  {isPlaceholder ? '—' : (
+                    <LiveValue
+                      value={stock.changePercent}
+                      format={formatPercent}
+                      showIcon
+                      positive={stock.change >= 0}
+                      className="stock-percent"
+                    />
+                  )}
                 </div>
               </div>
               <Link to={isPlaceholder ? '/search' : `/company/${stock.symbol}`} className="text-link">
@@ -82,4 +102,4 @@ function TrendingStocks({ loading, stocks = [] }) {
   );
 }
 
-export default TrendingStocks;
+export default memo(TrendingStocks);

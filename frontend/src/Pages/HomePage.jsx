@@ -6,11 +6,20 @@ import Footer from '../Components/Footer';
 import { useHomepageData } from '../Hooks/useHomepageData';
 
 function HomePage() {
-  const { loading, error, heroData, marketOverviewData, trendingStocksData, popularCompaniesData } = useHomepageData();
+  const {
+    loading,
+    error,
+    heroData,
+    marketOverviewData,
+    trendingStocksData,
+    popularCompaniesData,
+    lastRefreshedAt,
+    isUpdating,
+  } = useHomepageData();
 
   return (
     <>
-      <Hero loading={loading} error={error} heroData={heroData} />
+      <Hero loading={loading} error={error} heroData={heroData} lastRefreshedAt={lastRefreshedAt} isUpdating={isUpdating} />
       <MarketOverview loading={loading} marketData={marketOverviewData} />
       <PopularCompanies loading={loading} companies={popularCompaniesData} />
       <TrendingStocks loading={loading} stocks={trendingStocksData} />

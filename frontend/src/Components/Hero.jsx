@@ -1,7 +1,11 @@
+import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight, Play, TrendingUp, ShieldCheck, BarChart3 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import HeroChart from './charts/HeroChart';
+import LiveValue from './LiveValue';
+import LiveTimer from './LiveTimer';
+import LiveStatus from './LiveStatus';
 
 function formatCurrency(value) {
   if (value === null || value === undefined) {
@@ -23,11 +27,12 @@ function formatPercent(value) {
   return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
 }
 
-function Hero({ loading, error, heroData }) {
+function Hero({ loading, error, heroData, lastRefreshedAt, isUpdating }) {
   const nifty = heroData?.nifty || null;
   const sensex = heroData?.sensex || null;
   const bankNifty = heroData?.bankNifty || null;
   const marketStatus = nifty?.marketStatus || 'Market Closed';
+  const lastUpdateTime = new Date(lastRefreshedAt || heroData?.lastUpdated || Date.now());
 
   return (
     <section className="hero-section">
@@ -72,11 +77,24 @@ function Hero({ loading, error, heroData }) {
               <div className="hero-card__header">
                 <div>
                   <p className="metric-label">NIFTY 50</p>
-                  <h3>{loading ? 'Loading…' : formatCurrency(nifty?.currentPrice)}</h3>
+                  <h3>
+                    <LiveValue
+                      value={loading ? null : nifty?.currentPrice}
+                      format={formatCurrency}
+                      showIcon
+                      positive={nifty?.changePercent >= 0}
+                      className="hero-price"
+                    />
+                  </h3>
                 </div>
                 <div className="positive-chip">
                   <TrendingUp size={16} />
-                  {loading ? '—' : formatPercent(nifty?.changePercent)}
+                  <LiveValue
+                    value={loading ? null : nifty?.changePercent}
+                    format={(value) => formatPercent(value)}
+                    className="hero-percent"
+                    positive={nifty?.changePercent >= 0}
+                  />
                 </div>
               </div>
               <div className="chart-placeholder h-[180px] md:h-[220px] rounded-[1rem] overflow-hidden">
@@ -107,7 +125,9 @@ function Hero({ loading, error, heroData }) {
               <BarChart3 size={18} className="hero-icon" />
               <div>
                 <p className="metric-label">Latest update</p>
-                <h4>{loading ? 'Updating…' : new Date(heroData?.lastUpdated || Date.now()).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</h4>
+                <h4>{loading ? 'Updating…' : lastUpdateTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</h4>
+                <LiveTimer timestamp={lastRefreshedAt || heroData?.lastUpdated} />
+                <LiveStatus updating={isUpdating} />
               </div>
             </div>
           </div>
@@ -117,4 +137,4 @@ function Hero({ loading, error, heroData }) {
   );
 }
 
-export default Hero;
+export default memo(Hero);

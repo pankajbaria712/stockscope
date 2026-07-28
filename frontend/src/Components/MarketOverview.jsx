@@ -1,6 +1,8 @@
+import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import SectionHeading from './UI/SectionHeading';
+import LiveValue from './LiveValue';
 
 function formatCurrency(value) {
   if (value === null || value === undefined) {
@@ -60,9 +62,27 @@ function MarketOverview({ loading, marketData = [] }) {
                   <TrendingDown className="market-icon market-icon--down" />
                 )}
               </div>
-              <h3>{isPlaceholder ? '—' : formatCurrency(market.currentPrice)}</h3>
+              <h3>
+                {isPlaceholder ? '—' : (
+                  <LiveValue
+                    value={market.currentPrice}
+                    format={formatCurrency}
+                    showIcon
+                    positive={market.change >= 0}
+                    className="market-current-price"
+                  />
+                )}
+              </h3>
               <span className={positive ? 'market-change market-change--up' : 'market-change market-change--down'}>
-                {isPlaceholder ? '—' : formatPercent(market.changePercent)}
+                {isPlaceholder ? '—' : (
+                  <LiveValue
+                    value={market.changePercent}
+                    format={formatPercent}
+                    showIcon
+                    positive={market.change >= 0}
+                    className="market-change-text"
+                  />
+                )}
               </span>
             </motion.article>
           );
@@ -72,4 +92,4 @@ function MarketOverview({ loading, marketData = [] }) {
   );
 }
 
-export default MarketOverview;
+export default memo(MarketOverview);
