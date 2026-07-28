@@ -196,12 +196,13 @@ export function useHomepageData() {
   const startPolling = () => {
     clearTimers();
 
+    loadHomepageData();
+
     if (!isIndiaMarketOpen()) {
       scheduleResume();
       return;
     }
 
-    loadHomepageData();
     pollRef.current = window.setInterval(() => {
       if (!activeRef.current) {
         return;
