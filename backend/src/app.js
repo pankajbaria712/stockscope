@@ -7,6 +7,7 @@ require('dotenv').config();
 
 const authRoutes = require('./routes/authRoutes');
 const stockRoutes = require('./routes/stockRoutes');
+const homeRoutes = require('./routes/homeRoutes');
 const { buildErrorResponse } = require('./utils/response');
 const { ensureUserTableExists } = require('./models/userModel');
 
@@ -27,6 +28,7 @@ app.get('/health', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/stocks', stockRoutes);
+app.use('/api/home', homeRoutes);
 
 app.use((req, res) => {
   res.status(404).json(buildErrorResponse(404, 'Route not found'));

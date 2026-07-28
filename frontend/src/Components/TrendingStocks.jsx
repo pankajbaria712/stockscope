@@ -3,15 +3,31 @@ import { ArrowUpRight, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SectionHeading from './UI/SectionHeading';
 
-const stocks = [
-  { name: 'Apple', symbol: 'AAPL', price: '$214.32', change: '+2.16%', accent: 'linear-gradient(135deg, #22D3EE, #0EA5E9)' },
-  { name: 'Microsoft', symbol: 'MSFT', price: '$426.18', change: '+1.06%', accent: 'linear-gradient(135deg, #10B981, #059669)' },
-  { name: 'Tesla', symbol: 'TSLA', price: '$255.87', change: '-0.81%', accent: 'linear-gradient(135deg, #F59E0B, #EF4444)' },
-  { name: 'NVIDIA', symbol: 'NVDA', price: '$124.33', change: '+3.12%', accent: 'linear-gradient(135deg, #818CF8, #4F46E5)' },
-  { name: 'Amazon', symbol: 'AMZN', price: '$182.64', change: '+0.74%', accent: 'linear-gradient(135deg, #34D399, #10B981)' },
-];
+function formatCurrency(value) {
+  if (value === null || value === undefined) {
+    return '—';
+  }
 
-function TrendingStocks() {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatPercent(value) {
+  if (value === null || value === undefined) {
+    return '—';
+  }
+
+  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+}
+
+function TrendingStocks({ loading, stocks = [] }) {
+  const stockList = loading
+    ? Array.from({ length: 5 }).map((_, index) => ({ id: index }))
+    : stocks;
+
   return (
     <section className="section-block">
       <SectionHeading
@@ -21,40 +37,46 @@ function TrendingStocks() {
       />
 
       <div className="stock-grid">
-        {stocks.map((stock, index) => (
-          <motion.article
-            key={stock.symbol}
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.25 }}
-            transition={{ duration: 0.4, delay: index * 0.06 }}
-            whileHover={{ y: -6, scale: 1.01 }}
-            className="stock-card"
-          >
-            <div className="stock-card__top">
-              <div className="stock-pill" style={{ background: stock.accent }} />
-              <div>
-                <h3>{stock.name}</h3>
-                <p>{stock.symbol}</p>
+        {stockList.map((stock, index) => {
+          const isPlaceholder = loading || !stock?.symbol;
+          const positive = stock?.change >= 0;
+          const accent = stock?.positive ? 'linear-gradient(135deg, #22D3EE, #0EA5E9)' : 'linear-gradient(135deg, #f59e0b, #ef4444)';
+
+          return (
+            <motion.article
+              key={stock?.symbol || stock.id || index}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.25 }}
+              transition={{ duration: 0.4, delay: index * 0.06 }}
+              whileHover={{ y: -6, scale: 1.01 }}
+              className="stock-card"
+            >
+              <div className="stock-card__top">
+                <div className="stock-pill" style={{ background: accent }} />
+                <div>
+                  <h3>{isPlaceholder ? 'Loading stock' : stock.name}</h3>
+                  <p>{isPlaceholder ? '—' : stock.symbol}</p>
+                </div>
               </div>
-            </div>
-            <div className="stock-chart" aria-hidden="true" />
-            <div className="stock-card__footer">
-              <div>
-                <p className="metric-label">Price</p>
-                <strong>{stock.price}</strong>
+              <div className="stock-chart" aria-hidden="true" />
+              <div className="stock-card__footer">
+                <div>
+                  <p className="metric-label">Price</p>
+                  <strong>{isPlaceholder ? '—' : formatCurrency(stock.currentPrice)}</strong>
+                </div>
+                <div className={positive ? 'market-change market-change--up' : 'market-change market-change--down'}>
+                  {isPlaceholder ? '—' : formatPercent(stock.changePercent)}
+                </div>
               </div>
-              <div className={stock.change.startsWith('-') ? 'market-change market-change--down' : 'market-change market-change--up'}>
-                {stock.change}
-              </div>
-            </div>
-            <Link to={`/company/${stock.symbol}`} className="text-link">
-              <Sparkles size={15} />
-              View Details
-              <ArrowUpRight size={15} />
-            </Link>
-          </motion.article>
-        ))}
+              <Link to={isPlaceholder ? '/search' : `/company/${stock.symbol}`} className="text-link">
+                <Sparkles size={15} />
+                View Details
+                <ArrowUpRight size={15} />
+              </Link>
+            </motion.article>
+          );
+        })}
       </div>
     </section>
   );

@@ -1,24 +1,19 @@
 import Hero from '../Components/Hero';
 import MarketOverview from '../Components/MarketOverview';
-import TrendingStocks from '../Components/TrendingStocks';
 import PopularCompanies from '../Components/PopularCompanies';
-import Features from '../Components/Features';
-import FeatureShowcase from '../Components/FeatureShowcase';
-import CTA from '../Components/CTA';
+import TrendingStocks from '../Components/TrendingStocks';
 import Footer from '../Components/Footer';
+import { useHomepageData } from '../Hooks/useHomepageData';
 
 function HomePage() {
+  const { loading, error, heroData, marketOverviewData, trendingStocksData, popularCompaniesData } = useHomepageData();
+
   return (
     <>
-      <main className="landing-page">
-        <Hero />
-        <MarketOverview />
-        <TrendingStocks />
-        <PopularCompanies />
-        <Features />
-        <FeatureShowcase />
-        <CTA />
-      </main>
+      <Hero loading={loading} error={error} heroData={heroData} />
+      <MarketOverview loading={loading} marketData={marketOverviewData} />
+      <PopularCompanies loading={loading} companies={popularCompaniesData} />
+      <TrendingStocks loading={loading} stocks={trendingStocksData} />
       <Footer />
     </>
   );

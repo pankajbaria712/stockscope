@@ -2,14 +2,31 @@ import { motion } from 'framer-motion';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import SectionHeading from './UI/SectionHeading';
 
-const markets = [
-  { name: 'S&P 500', value: '5,743.21', change: '+0.72%', positive: true },
-  { name: 'NASDAQ', value: '18,234.08', change: '+1.14%', positive: true },
-  { name: 'NIFTY 50', value: '24,890.40', change: '-0.38%', positive: false },
-  { name: 'SENSEX', value: '81,741.22', change: '+0.51%', positive: true },
-];
+function formatCurrency(value) {
+  if (value === null || value === undefined) {
+    return '—';
+  }
 
-function MarketOverview() {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatPercent(value) {
+  if (value === null || value === undefined) {
+    return '—';
+  }
+
+  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+}
+
+function MarketOverview({ loading, marketData = [] }) {
+  const markets = loading
+    ? Array.from({ length: 4 }).map((_, index) => ({ id: index }))
+    : marketData;
+
   return (
     <section className="section-block">
       <SectionHeading
@@ -19,26 +36,37 @@ function MarketOverview() {
       />
 
       <div className="market-grid">
-        {markets.map((market, index) => (
-          <motion.article
-            key={market.name}
-            initial={{ opacity: 0, y: 18 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.3 }}
-            transition={{ duration: 0.4, delay: index * 0.08 }}
-            className="market-card"
-            whileHover={{ y: -6, scale: 1.01 }}
-          >
-            <div className="market-card__top">
-              <p>{market.name}</p>
-              {market.positive ? <TrendingUp className="market-icon market-icon--up" /> : <TrendingDown className="market-icon market-icon--down" />}
-            </div>
-            <h3>{market.value}</h3>
-            <span className={market.positive ? 'market-change market-change--up' : 'market-change market-change--down'}>
-              {market.change}
-            </span>
-          </motion.article>
-        ))}
+        {markets.map((market, index) => {
+          const isPlaceholder = loading || !market?.name;
+          const positive = market?.change >= 0;
+
+          return (
+            <motion.article
+              key={market?.name || market.id || index}
+              initial={{ opacity: 0, y: 18 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.3 }}
+              transition={{ duration: 0.4, delay: index * 0.08 }}
+              className="market-card"
+              whileHover={{ y: -6, scale: 1.01 }}
+            >
+              <div className="market-card__top">
+                <p>{isPlaceholder ? 'Loading…' : market.name}</p>
+                {isPlaceholder ? (
+                  <div className="market-icon market-icon--up" />
+                ) : positive ? (
+                  <TrendingUp className="market-icon market-icon--up" />
+                ) : (
+                  <TrendingDown className="market-icon market-icon--down" />
+                )}
+              </div>
+              <h3>{isPlaceholder ? '—' : formatCurrency(market.currentPrice)}</h3>
+              <span className={positive ? 'market-change market-change--up' : 'market-change market-change--down'}>
+                {isPlaceholder ? '—' : formatPercent(market.changePercent)}
+              </span>
+            </motion.article>
+          );
+        })}
       </div>
     </section>
   );

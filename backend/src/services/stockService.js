@@ -1,4 +1,5 @@
-const yahooFinance = require('yahoo-finance2').default;
+const YahooFinance = require('yahoo-finance2').default;
+const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 const { AppError } = require('../utils/errors');
 
 function normalizeSymbol(symbol) {

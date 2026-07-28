@@ -2,7 +2,32 @@ import { motion } from 'framer-motion';
 import { ArrowRight, Play, TrendingUp, ShieldCheck, BarChart3 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-function Hero() {
+function formatCurrency(value) {
+  if (value === null || value === undefined) {
+    return '—';
+  }
+
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatPercent(value) {
+  if (value === null || value === undefined) {
+    return '—';
+  }
+
+  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+}
+
+function Hero({ loading, error, heroData }) {
+  const nifty = heroData?.nifty || null;
+  const sensex = heroData?.sensex || null;
+  const bankNifty = heroData?.bankNifty || null;
+  const marketStatus = nifty?.marketStatus || 'Market Closed';
+
   return (
     <section className="hero-section">
       <div className="hero-section__content">
@@ -45,12 +70,12 @@ function Hero() {
             <div className="glass-card hero-card hero-card--main">
               <div className="hero-card__header">
                 <div>
-                  <p className="metric-label">Portfolio health</p>
-                  <h3>$184.2K</h3>
+                  <p className="metric-label">NIFTY 50</p>
+                  <h3>{loading ? 'Loading…' : formatCurrency(nifty?.currentPrice)}</h3>
                 </div>
                 <div className="positive-chip">
                   <TrendingUp size={16} />
-                  +8.24%
+                  {loading ? '—' : formatPercent(nifty?.changePercent)}
                 </div>
               </div>
               <div className="chart-placeholder" />
@@ -59,19 +84,23 @@ function Hero() {
             <div className="glass-card hero-card hero-card--side">
               <div className="hero-card__header">
                 <div>
-                  <p className="metric-label">Watchlist</p>
-                  <h4>NVDA</h4>
+                  <p className="metric-label">Market status</p>
+                  <h4>{loading ? 'Loading…' : marketStatus}</h4>
                 </div>
                 <ShieldCheck size={18} className="hero-icon" />
               </div>
-              <p className="hero-card__text">Momentum remains strong with above-average volume.</p>
+              <p className="hero-card__text">
+                {loading
+                  ? 'Fetching the latest NSE and BSE market snapshot.'
+                  : `SENSEX ${formatCurrency(sensex?.currentPrice)}, BANK NIFTY ${formatCurrency(bankNifty?.currentPrice)}.`}
+              </p>
             </div>
 
             <div className="glass-card hero-card hero-card--floating">
               <BarChart3 size={18} className="hero-icon" />
               <div>
-                <p className="metric-label">Compare</p>
-                <h4>AAPL vs MSFT</h4>
+                <p className="metric-label">Latest update</p>
+                <h4>{loading ? 'Updating…' : new Date(heroData?.lastUpdated || Date.now()).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</h4>
               </div>
             </div>
           </div>
