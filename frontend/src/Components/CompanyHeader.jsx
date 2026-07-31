@@ -107,6 +107,12 @@ function CompanyHeader({ details, quote, isWatchlisted, onToggleWatchlist, onOpe
         icon: Layers,
       },
       {
+        title: 'EPS',
+        value: quote?.eps ?? details?.eps,
+        label: quote?.eps != null ? quote.eps.toFixed(2) : 'N/A',
+        icon: ArrowUpRight,
+      },
+      {
         title: '52 week high',
         value: fiftyTwoWeekHigh,
         label: formatCurrency(fiftyTwoWeekHigh, currency),
@@ -119,31 +125,25 @@ function CompanyHeader({ details, quote, isWatchlisted, onToggleWatchlist, onOpe
         icon: TrendingDown,
       },
       {
-        title: 'Open',
-        value: quote?.open,
-        label: quote?.open != null ? formatCurrency(quote.open, currency) : 'N/A',
-        icon: ArrowUpRight,
-      },
-      {
-        title: 'Previous close',
-        value: quote?.previousClose,
-        label: quote?.previousClose != null ? formatCurrency(quote.previousClose, currency) : 'N/A',
-        icon: Clock3,
-      },
-      {
         title: 'Volume',
         value: quote?.volume,
         label: quote?.volume != null ? formatNumber(quote.volume) : 'N/A',
         icon: Globe,
       },
       {
-        title: 'Average volume',
-        value: averageVolume,
-        label: averageVolume != null ? formatNumber(averageVolume) : 'N/A',
+        title: 'Industry',
+        value: industry,
+        label: industry,
+        icon: Globe,
+      },
+      {
+        title: 'Sector',
+        value: sector,
+        label: sector,
         icon: Globe,
       },
     ],
-    [averageVolume, currency, fiftyTwoWeekHigh, fiftyTwoWeekLow, marketCap, peRatio, quote?.open, quote?.previousClose, quote?.volume]
+    [averageVolume, currency, details?.eps, exchange, fiftyTwoWeekHigh, fiftyTwoWeekLow, industry, marketCap, peRatio, quote?.volume, sector]
   );
 
   const handleShare = async () => {
@@ -170,11 +170,39 @@ function CompanyHeader({ details, quote, isWatchlisted, onToggleWatchlist, onOpe
 
   const logoText = companyName ? companyName.charAt(0).toUpperCase() : 'S';
 
+  // Helper: derive cap size
+  const capSize = useMemo(() => {
+    const m = marketCap;
+    if (!m || !Number.isFinite(Number(m))) return 'N/A';
+    const n = Number(m);
+    if (n >= 1e9) return 'Large Cap';
+    if (n >= 2e8) return 'Mid Cap';
+    return 'Small Cap';
+  }, [marketCap]);
+
+  const website = details?.website || details?.websiteUrl || details?.url || details?.homepage || details?.webpage;
+
+  const quickStatsOrder = [
+    { key: 'marketCap', label: 'Market Cap', value: marketCap, kind: 'currency', icon: BarChart3 },
+    { key: 'open', label: 'Open', value: quote?.open ?? quote?.previous_open, kind: 'currency', icon: ArrowUpRight },
+    { key: 'previousClose', label: 'Previous Close', value: quote?.previousClose ?? quote?.previous_close, kind: 'currency', icon: ArrowUpRight },
+    { key: 'dayHigh', label: 'Day High', value: quote?.high, kind: 'currency', icon: TrendingUp },
+    { key: 'dayLow', label: 'Day Low', value: quote?.low, kind: 'currency', icon: TrendingDown },
+    { key: '52High', label: '52W High', value: fiftyTwoWeekHigh, kind: 'currency', icon: TrendingUp },
+    { key: '52Low', label: '52W Low', value: fiftyTwoWeekLow, kind: 'currency', icon: TrendingDown },
+    { key: 'volume', label: 'Volume', value: quote?.volume, kind: 'number', icon: BarChart3 },
+    { key: 'avgVolume', label: 'Avg Volume', value: quote?.averageVolume, kind: 'number', icon: BarChart3 },
+    { key: 'pe', label: 'P/E', value: peRatio, kind: 'number', icon: Layers },
+    { key: 'eps', label: 'EPS', value: quote?.eps ?? details?.eps, kind: 'number', icon: ArrowUpRight },
+    { key: 'beta', label: 'Beta', value: details?.beta ?? quote?.beta, kind: 'number', icon: Globe },
+    { key: 'dividendYield', label: 'Dividend Yield', value: details?.dividendYield ?? details?.dividend_yield ?? null, kind: 'percent', icon: Globe },
+  ];
+
   return (
-    <div className="company-header">
-      <div className="company-header-top">
-        <div className="company-header-main">
-          <div className="company-logo-shell">
+    <div className="company-header company-header--premium">
+      <div className="company-header-grid">
+        <div className="company-header-left">
+          <div className="company-logo-shell company-logo-shell--large">
             {details?.logo ? (
               <img
                 src={details.logo}
@@ -189,74 +217,108 @@ function CompanyHeader({ details, quote, isWatchlisted, onToggleWatchlist, onOpe
             )}
           </div>
 
-          <div className="company-header-info">
-            <div>
-              <p className="section-eyebrow">Company overview</p>
-              <h2 className="company-header-title">{companyName}</h2>
+          <div className="company-identity">
+            <div className="company-identity-line">
+              <h1 className="company-header-title">{companyName}</h1>
+              <div className="company-status-inline">
+                <span className={isMarketLive ? 'market-badge market-badge--live' : 'market-badge market-badge--closed'}>
+                  <span className={isMarketLive ? 'market-dot' : 'market-dot--closed'} />
+                  {statusLabel}
+                </span>
+                <small className="company-status-time">{isMarketLive ? 'Updated' : 'Last updated'} {lastUpdatedLabel}</small>
+              </div>
             </div>
-            <div className="company-header-subtitle">
-              <span>{symbol}</span>
-              <span>•</span>
-              <span>{exchange}</span>
+
+            <div className="company-meta">
+              <div className="company-symbol">{symbol}</div>
+              <div className="company-exchange">{exchange} · {details?.country || details?.countryCode || '—'} · {currency}</div>
             </div>
-            <div className="company-header-subtitle">
-              <span>{industry}</span>
-              <span>•</span>
-              <span>{sector}</span>
+
+            <div className="company-badges">
+              <span className="company-badge">{sector || 'Unknown sector'}</span>
+              <span className="company-badge">{industry || 'Unknown industry'}</span>
+              <span className="company-badge">{capSize}</span>
+              {details?.fno ? <span className="company-badge">F&O</span> : null}
+              {details?.esg ? <span className="company-badge">ESG</span> : null}
+            </div>
+
+            <div className="company-actions-row">
+              {website ? (
+                <a className="primary-button" href={website} target="_blank" rel="noreferrer">Website</a>
+              ) : (
+                <button type="button" className="ghost-button" disabled>Website</button>
+              )}
+
+              <button type="button" className={`ghost-button ${isWatchlisted ? 'watchlist-active' : ''}`} onClick={onToggleWatchlist}>
+                <Star size={16} /> {isWatchlisted ? 'Saved' : 'Add to Watchlist'}
+              </button>
+
+              <button type="button" className="ghost-button" onClick={handleShare}>
+                <Share2 size={16} /> Share
+              </button>
             </div>
           </div>
         </div>
 
-        <div className="company-header-actions">
-          <button type="button" className={`primary-button company-header__button ${isWatchlisted ? 'watchlist-active' : ''}`} onClick={onToggleWatchlist}>
-            <Star size={16} />
-            {isWatchlisted ? 'Saved' : 'Add to Watchlist'}
-          </button>
-          <button type="button" className="secondary-button company-header__button" onClick={handleShare}>
-            <Share2 size={16} />
-            Share
-          </button>
-            <button type="button" className="secondary-button company-header__button" onClick={onOpenChart}>
-              <ArrowUpRight size={16} />
-              Open full chart
-            </button>
-              format={(value) => formatCurrency(value, currency)}
-              showIcon
-              positive={pricePositive}
-            />
-          </strong>
-        </div>
-        <div className="company-price-card">
-          <span>Today's change</span>
-          <strong>
-            <LiveValue
-              value={priceChange}
-              format={(value) => (value !== null && value !== undefined ? `${value >= 0 ? '+' : ''}${value.toFixed(2)}` : '—')}
-              showIcon
-              positive={pricePositive}
-            />
-          </strong>
-        </div>
-        <div className="company-price-card">
-          <span>Percentage change</span>
-          <strong>
-            <LiveValue
-              value={percentChange}
-              format={formatPercent}
-              showIcon
-              positive={pricePositive}
-            />
-          </strong>
-        </div>
-        <div className="company-price-card">
-          <span>Market status</span>
-          <div className={`market-badge ${isMarketLive ? 'market-badge--live' : 'market-badge--closed'}`}>
-            <span className={`market-dot ${isMarketLive ? '' : 'market-dot--closed'}`} />
-            <span>{statusLabel}</span>
+        <div className="company-header-center">
+          <div className="price-panel-card">
+            <div className="price-main">
+              <div className="price-value">
+                <LiveValue
+                  value={quote?.currentPrice}
+                  format={(value) => formatCurrency(value, currency)}
+                  showIcon
+                  positive={pricePositive}
+                />
+              </div>
+              <div className="price-delta">
+                <LiveValue
+                  value={priceChange}
+                  format={(value) => (value !== null && value !== undefined ? `${value >= 0 ? '+' : ''}${value.toFixed(2)}` : '—')}
+                  showIcon
+                  positive={pricePositive}
+                />
+                <LiveValue
+                  value={percentChange}
+                  format={formatPercent}
+                  showIcon
+                  positive={pricePositive}
+                />
+              </div>
+            </div>
+            <div className="price-meta">
+              <div className="market-status">
+                <span className={`market-badge ${isMarketLive ? 'market-badge--live' : 'market-badge--closed'}`}>
+                  <span className={`market-dot ${isMarketLive ? '' : 'market-dot--closed'}`} />
+                  <span>{statusLabel}</span>
+                </span>
+                <span className="market-updated">{lastUpdatedLabel}</span>
+              </div>
+            </div>
           </div>
-          <p className="live-timer">
-            {isMarketLive ? 'Updated' : 'Last updated'} {lastUpdatedLabel}
-          </p>
+        </div>
+
+        <div className="company-header-right">
+          <div className="quick-stats-grid">
+            {quickStatsOrder.map((stat) => {
+              const Icon = stat.icon;
+              let label = 'N/A';
+              if (stat.kind === 'currency') label = stat.value != null ? formatCurrency(stat.value, currency) : 'N/A';
+              else if (stat.kind === 'percent') label = stat.value != null ? `${stat.value >= 0 ? '+' : ''}${Number(stat.value).toFixed(2)}%` : 'N/A';
+              else if (stat.kind === 'number') label = stat.value != null ? formatNumber(stat.value) : 'N/A';
+              else label = stat.value != null ? String(stat.value) : 'N/A';
+
+              return (
+                <div key={stat.key} className="stat-card stat-card--compact">
+                  <div className="stat-card__icon"><Icon size={16} /></div>
+                  <div className="stat-card__body">
+                    <span className="stat-card__label">{stat.label}</span>
+                    <strong className="stat-card__value">{label}</strong>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -264,24 +326,9 @@ function CompanyHeader({ details, quote, isWatchlisted, onToggleWatchlist, onOpe
         <p className={descriptionExpanded ? 'company-description__text expanded' : 'company-description__text'}>{details?.description || 'No company description is available yet.'}</p>
         {details?.description ? (
           <button type="button" className="ghost-button company-description-toggle" onClick={() => setDescriptionExpanded((value) => !value)}>
-            {descriptionExpanded ? 'Collapse' : 'Read more'}
+            {descriptionExpanded ? 'Read less' : 'Read more'}
           </button>
         ) : null}
-      </div>
-
-      <div className="company-quickstats-grid">
-        {stats.map((item) => {
-          const Icon = item.icon;
-          return (
-            <div key={item.title} className="stat-card">
-              <div className="stat-card__icon">
-                <Icon size={16} />
-              </div>
-              <span className="stat-card__label">{item.title}</span>
-              <strong className="stat-card__value">{item.label}</strong>
-            </div>
-          );
-        })}
       </div>
     </div>
   );

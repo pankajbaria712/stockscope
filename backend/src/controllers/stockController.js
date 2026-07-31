@@ -19,7 +19,7 @@ const getStockQuote = asyncHandler(async (req, res) => {
 
 const getStockChart = asyncHandler(async (req, res) => {
   const payload = await stockService.getStockChart(req.params.symbol, {
-    range: req.query.range || req.query.interval,
+    range: req.query.range,
     interval: req.query.interval,
     outputsize: req.query.outputsize,
   });
@@ -27,9 +27,15 @@ const getStockChart = asyncHandler(async (req, res) => {
   res.status(200).json(buildSuccessResponse(200, 'Chart data loaded', payload));
 });
 
+const getCompanyHubData = asyncHandler(async (req, res) => {
+  const payload = await stockService.getCompanyHubData(req.params.symbol);
+  res.status(200).json(buildSuccessResponse(200, 'Company hub data loaded', payload));
+});
+
 module.exports = {
   searchStocks,
   getCompanyDetails,
   getStockQuote,
   getStockChart,
+  getCompanyHubData,
 };

@@ -23,10 +23,10 @@ function normalizeRange(range) {
   return rangeMap[value] || '1mo';
 }
 
-function buildHistoricalRequestConfig(range) {
+function buildHistoricalRequestConfig(range, interval) {
   const normalizedRange = String(range || '1M').trim().toUpperCase();
-  const now = Math.floor(Date.now() / 1000);
-  const daysAgo = {
+  const finalInterval = chooseChartInterval(normalizedRange, interval);
+  const rangeMap = {
     '1D': 1,
     '5D': 5,
     '1M': 30,
@@ -36,42 +36,93 @@ function buildHistoricalRequestConfig(range) {
     '5Y': 1825,
     MAX: 3650,
   };
-  const intervalMap = {
-    '1D': '5m',
-    '5D': '15m',
-    '1M': '1d',
-    '3M': '1d',
-    '6M': '1d',
-    '1Y': '1d',
-    '5Y': '1wk',
-    MAX: '1mo',
-  };
 
-  const periodDays = daysAgo[normalizedRange] || daysAgo['1M'];
-  const interval = intervalMap[normalizedRange] || intervalMap['1M'];
-
+  const periodDays = rangeMap[normalizedRange] || rangeMap['1M'];
   return {
-    period1: now - (periodDays * 24 * 60 * 60),
-    period2: now,
-    interval,
+    period1: Math.max(0, Math.floor(Date.now() / 1000) - periodDays * 24 * 60 * 60),
+    period2: Math.floor(Date.now() / 1000),
+    interval: finalInterval,
   };
 }
 
+const SUPPORTED_INTERVALS = ['1m', '2m', '5m', '15m', '30m', '60m', '1d', '1wk', '1mo', 'D', 'W', 'M', '3M', '6M', '12M'];
+
 function normalizeInterval(interval) {
-  const normalized = String(interval || '1M').trim().toUpperCase();
+  if (!interval) {
+    return null;
+  }
+
+  const rawValue = String(interval || '').trim();
+  if (['1M', 'M', '1mo', 'mo', 'm'].includes(rawValue)) {
+    return '1mo';
+  }
+
+  const normalized = rawValue.toLowerCase();
   const intervalMap = {
-    '1D': 'D',
-    '1W': 'W',
-    '1M': 'M',
-    '3M': '3M',
-    '6M': '6M',
-    '1Y': '12M',
-    '5Y': '60M',
-    MAX: 'MAX',
-    MAXIMUM: 'MAX',
+    '1m': '1m',
+    '2m': '2m',
+    '5m': '5m',
+    '15m': '15m',
+    '30m': '30m',
+    '60m': '60m',
+    '1h': '60m',
+    '1d': '1d',
+    'd': '1d',
+    '1w': '1wk',
+    'wk': '1wk',
+    '1wk': '1wk',
+    '3m': '1mo',
+    '6m': '1mo',
+    '1y': '1mo',
+    '12m': '1mo',
   };
 
-  return intervalMap[normalized] || 'M';
+  return intervalMap[normalized] || null;
+}
+
+function chooseChartInterval(range, interval) {
+  const normalizedRange = String(range || '1M').trim().toUpperCase();
+  const requested = normalizeInterval(interval);
+  const defaultIntervalMap = {
+    '1D': '1m',
+    '5D': '5m',
+    '1M': '1d',
+    '3M': '1d',
+    '6M': '1d',
+    '1Y': '1wk',
+    '5Y': '1wk',
+    'MAX': '1mo',
+  };
+  const supportedByRange = {
+    '1D': ['1m', '2m', '5m', '15m', '30m', '60m'],
+    '5D': ['5m', '15m', '30m', '60m'],
+    '1M': ['5m', '15m', '30m', '60m', '1d'],
+    '3M': ['15m', '30m', '60m', '1d'],
+    '6M': ['30m', '60m', '1d'],
+    '1Y': ['1d', '1wk'],
+    '5Y': ['1d', '1wk'],
+    'MAX': ['1d', '1wk', '1mo'],
+  };
+
+  const allowed = supportedByRange[normalizedRange] || supportedByRange['1M'];
+  if (requested && allowed.includes(requested)) {
+    return requested;
+  }
+  if (!requested) {
+    return defaultIntervalMap[normalizedRange] || defaultIntervalMap['1M'];
+  }
+
+  const requestedIndex = SUPPORTED_INTERVALS.indexOf(requested);
+  if (requestedIndex === -1) {
+    return defaultIntervalMap[normalizedRange] || defaultIntervalMap['1M'];
+  }
+
+  return allowed.reduce((nearest, candidate) => {
+    const candidateIndex = SUPPORTED_INTERVALS.indexOf(candidate);
+    if (candidateIndex === -1) return nearest;
+    if (!nearest) return candidate;
+    return Math.abs(candidateIndex - requestedIndex) < Math.abs(SUPPORTED_INTERVALS.indexOf(nearest) - requestedIndex) ? candidate : nearest;
+  }, null) || defaultIntervalMap[normalizedRange] || defaultIntervalMap['1M'];
 }
 
 function buildStockErrorPayload(message, statusCode = 400) {
@@ -79,6 +130,52 @@ function buildStockErrorPayload(message, statusCode = 400) {
     success: false,
     message,
     statusCode,
+  };
+}
+
+function deriveMarketCapCategory(marketCap) {
+  const amount = Number(marketCap);
+  if (!Number.isFinite(amount)) {
+    return null;
+  }
+
+  if (amount >= 2e12) {
+    return 'Large Cap';
+  }
+
+  if (amount >= 2e11) {
+    return 'Mid Cap';
+  }
+
+  return 'Small Cap';
+}
+
+function buildCompanyHeaderPayload(payload = {}) {
+  const symbol = normalizeSymbol(payload.symbol);
+  const name = payload.name || payload.companyName || payload.shortName || payload.longName || symbol || 'Unknown company';
+  const marketCap = payload.marketCap ?? payload.market_cap ?? null;
+  const marketCapCategory = payload.marketCapCategory || deriveMarketCapCategory(marketCap);
+
+  return {
+    symbol,
+    name,
+    exchange: payload.exchange || null,
+    country: payload.country || payload.defaultCountry || null,
+    marketCapCategory,
+    indexMembership: payload.indexMembership || payload.index || null,
+    sector: payload.sector || null,
+    industry: payload.industry || null,
+    website: payload.website || payload.websiteUrl || null,
+    logo: payload.logo || payload.logourl || null,
+    currentPrice: payload.currentPrice ?? payload.regularMarketPrice ?? payload.price ?? null,
+    dayChange: payload.dayChange ?? payload.change ?? null,
+    dayChangePercent: payload.dayChangePercent ?? payload.changePercent ?? null,
+    marketCap,
+    fiftyTwoWeekHigh: payload.fiftyTwoWeekHigh ?? payload.week52High ?? null,
+    fiftyTwoWeekLow: payload.fiftyTwoWeekLow ?? payload.week52Low ?? null,
+    volume: payload.volume ?? null,
+    beta: payload.beta ?? null,
+    currency: payload.currency || 'USD',
   };
 }
 
@@ -235,10 +332,10 @@ function transformCompanyResponse(payload) {
     sector: payload.sector || '',
     industry: payload.industry || '',
     country: payload.country || '',
-    website: payload.website || '',
-    longBusinessSummary: payload.longBusinessSummary || '',
+    website: payload.website || payload.websiteUrl || '',
+    longBusinessSummary: payload.longBusinessSummary || payload.description || '',
     marketCap: payload.marketCap || null,
-    fullTimeEmployees: payload.fullTimeEmployees || null,
+    fullTimeEmployees: payload.fullTimeEmployees || payload.employees || null,
     logo: payload.logourl || payload.logo || '',
     currency: payload.currency || '',
   };
@@ -264,8 +361,14 @@ function transformQuoteResponse(payload) {
     change,
     changePercent,
     volume: Number(payload.volume ?? 0) || null,
-    currency: payload.currency || '',
-    marketState: payload.marketState || '',
+    currency: payload.currency || payload.currencySymbol || '',
+    marketState: payload.marketState || payload.marketState || '',
+    lastUpdated: payload.regularMarketTime ? new Date(payload.regularMarketTime * 1000).toISOString() : (payload.tradeTime ? new Date(payload.tradeTime).toISOString() : null),
+    peRatio: payload.trailingPE ?? payload.peRatio ?? null,
+    eps: payload.trailingEps ?? null,
+    fiftyTwoWeekHigh: payload.fiftyTwoWeekHigh ?? payload.week52High ?? null,
+    fiftyTwoWeekLow: payload.fiftyTwoWeekLow ?? payload.week52Low ?? null,
+    averageVolume: payload.averageVolume ?? null,
   };
 }
 
@@ -293,6 +396,40 @@ function transformChartResponse(payload) {
   }).filter((bar) => bar.time !== null);
 }
 
+function formatCurrencyValue(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return 'N/A';
+  }
+
+  const amount = Number(value);
+  if (amount >= 1e12) {
+    return `$${(amount / 1e12).toFixed(2)}T`;
+  }
+  if (amount >= 1e9) {
+    return `$${(amount / 1e9).toFixed(2)}B`;
+  }
+  if (amount >= 1e6) {
+    return `$${(amount / 1e6).toFixed(2)}M`;
+  }
+
+  return `$${amount.toFixed(2)}`;
+}
+
+function formatPercent(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return 'N/A';
+  }
+
+  return `${(Number(value) * 100).toFixed(2)}%`;
+}
+
+function formatNumber(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return 'N/A';
+  }
+  return Number(value).toLocaleString();
+}
+
 function getYahooError(error) {
   if (error?.message?.includes('rate') || error?.message?.includes('limit')) {
     throw new AppError('Yahoo Finance rate limit exceeded. Please try again shortly.', 429);
@@ -307,6 +444,173 @@ function getYahooError(error) {
   }
 
   throw new AppError('Unable to fetch stock data', 502);
+}
+
+function buildCompanyHubData({ symbol, quote, company, summary = {} }) {
+  const companyOfficers = company?.companyOfficers || summary?.summaryProfile?.companyOfficers || [];
+  const overview = {
+    companyName: company?.name || company?.companyName || 'Unknown company',
+    symbol: symbol || quote?.symbol || 'N/A',
+    logo: company?.logo || '',
+    exchange: company?.exchange || 'N/A',
+    sector: company?.sector || 'N/A',
+    industry: company?.industry || 'N/A',
+    headquarters: company?.city || company?.address1 || 'N/A',
+    ceo: company?.ceo || companyOfficers?.[0]?.name || summary?.summaryProfile?.companyOfficers?.[0]?.name || 'N/A',
+    foundedYear: company?.foundedYear || 'N/A',
+    employees: company?.fullTimeEmployees || company?.employees || summary?.summaryProfile?.fullTimeEmployees || 'N/A',
+    website: company?.website || '',
+    marketCap: company?.marketCap || quote?.marketCap || null,
+    enterpriseValue: summary?.defaultKeyStatistics?.enterpriseValue || null,
+    peRatio: summary?.defaultKeyStatistics?.trailingPE || null,
+    forwardPe: summary?.defaultKeyStatistics?.forwardPE || null,
+    eps: summary?.defaultKeyStatistics?.trailingEps || null,
+    bookValue: summary?.defaultKeyStatistics?.bookValue || null,
+    priceToBook: summary?.defaultKeyStatistics?.priceToBook || null,
+    dividendYield: summary?.defaultKeyStatistics?.dividendYield || null,
+    faceValue: summary?.defaultKeyStatistics?.faceValue || null,
+    beta: summary?.defaultKeyStatistics?.beta || null,
+    roe: summary?.financialData?.returnOnEquity || null,
+    roce: summary?.financialData?.returnOnAssets || null,
+    debtToEquity: summary?.financialData?.debtToEquity || null,
+    cashFlow: summary?.financialData?.operatingCashflow || null,
+    revenue: summary?.financialData?.totalRevenue || null,
+    netIncome: summary?.financialData?.netIncomeToCommon || null,
+    profitMargin: summary?.financialData?.profitMargins || null,
+    sharesOutstanding: summary?.defaultKeyStatistics?.sharesOutstanding || null,
+    description: company?.longBusinessSummary || company?.description || summary?.summaryProfile?.longBusinessSummary || '',
+  };
+
+  const technical = {
+    indicators: [
+      { label: 'Current Trend', value: quote?.change >= 0 ? 'Bullish' : 'Bearish', tone: quote?.change >= 0 ? 'positive' : 'negative' },
+      { label: 'Moving Average 20', value: quote?.movingAverage20 || 'N/A', tone: 'neutral' },
+      { label: 'Moving Average 50', value: quote?.movingAverage50 || 'N/A', tone: 'neutral' },
+      { label: 'Moving Average 200', value: quote?.movingAverage200 || 'N/A', tone: 'neutral' },
+      { label: 'RSI', value: quote?.rsi || 'N/A', tone: quote?.rsi > 70 ? 'negative' : quote?.rsi < 30 ? 'positive' : 'neutral' },
+      { label: 'MACD', value: quote?.macd || 'N/A', tone: quote?.macd >= 0 ? 'positive' : 'negative' },
+      { label: 'Momentum', value: quote?.momentum || 'N/A', tone: 'neutral' },
+      { label: 'Volatility', value: quote?.volatility || 'N/A', tone: 'neutral' },
+      { label: 'Support Level', value: quote?.supportLevel || 'N/A', tone: 'positive' },
+      { label: 'Resistance Level', value: quote?.resistanceLevel || 'N/A', tone: 'negative' },
+      { label: '52 Week High', value: quote?.fiftyTwoWeekHigh || 'N/A', tone: 'positive' },
+      { label: '52 Week Low', value: quote?.fiftyTwoWeekLow || 'N/A', tone: 'negative' },
+      { label: 'Average Volume', value: quote?.averageVolume || 'N/A', tone: 'neutral' },
+      { label: 'Current Volume', value: quote?.volume || 'N/A', tone: 'neutral' },
+      { label: 'High', value: quote?.high || 'N/A', tone: 'positive' },
+      { label: 'Low', value: quote?.low || 'N/A', tone: 'negative' },
+      { label: 'Open', value: quote?.open || 'N/A', tone: 'neutral' },
+      { label: 'Previous Close', value: quote?.previousClose || 'N/A', tone: 'neutral' },
+    ],
+  };
+
+  const financials = {
+    metrics: [
+      { label: 'Revenue', value: summary?.financialData?.totalRevenue || null, kind: 'currency' },
+      { label: 'Net Profit', value: summary?.financialData?.netIncomeToCommon || null, kind: 'currency' },
+      { label: 'Operating Income', value: summary?.financialData?.operatingIncome || null, kind: 'currency' },
+      { label: 'EBITDA', value: summary?.financialData?.ebitda || null, kind: 'currency' },
+      { label: 'Cash Flow', value: summary?.financialData?.operatingCashflow || null, kind: 'currency' },
+      { label: 'Free Cash Flow', value: summary?.financialData?.freeCashflow || null, kind: 'currency' },
+      { label: 'Assets', value: summary?.financialData?.totalAssets || null, kind: 'currency' },
+      { label: 'Liabilities', value: summary?.financialData?.totalDebt || null, kind: 'currency' },
+      { label: 'Equity', value: summary?.financialData?.totalCash || null, kind: 'currency' },
+      { label: 'Growth Rate', value: summary?.financialData?.revenueGrowth || null, kind: 'percent' },
+      { label: 'Operating Margin', value: summary?.financialData?.operatingMargins || null, kind: 'percent' },
+      { label: 'Net Margin', value: summary?.financialData?.profitMargins || null, kind: 'percent' },
+    ],
+    quarterlyResults: summary?.earnings?.financialsChart?.quarterly || [],
+    annualResults: summary?.earnings?.financialsChart?.yearly || [],
+  };
+
+  const fno = {
+    available: false,
+    message: 'F&O data is currently unavailable for this company.',
+    summary: [],
+  };
+
+  const news = {
+    items: [],
+    search: '',
+  };
+
+  const events = {
+    items: [],
+    search: '',
+  };
+
+  return {
+    overview,
+    technical,
+    financials,
+    fno,
+    news,
+    events,
+  };
+}
+
+async function getCompanyHubData(symbol) {
+  const normalizedSymbol = normalizeSymbol(symbol);
+  if (!normalizedSymbol) {
+    throw new AppError('Please provide a stock symbol', 400);
+  }
+
+  try {
+    const [quotePayload, summaryPayload] = await Promise.all([
+      yahooFinance.quote(normalizedSymbol),
+      yahooFinance.quoteSummary(normalizedSymbol, { modules: ['summaryProfile', 'financialData', 'defaultKeyStatistics', 'earnings'] }).catch(() => ({})),
+    ]);
+
+    const company = transformCompanyResponse(quotePayload);
+    const quote = transformQuoteResponse(quotePayload);
+    const summary = summaryPayload?.quoteSummary?.result?.[0] || {};
+
+    return buildCompanyHubData({
+      symbol: normalizedSymbol,
+      quote,
+      company: {
+        ...(company || {}),
+        ...(summary.summaryProfile || {}),
+      },
+      summary,
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+
+    const fallbackCompany = getFallbackStockEntry(normalizedSymbol);
+    if (fallbackCompany) {
+      return buildCompanyHubData({
+        symbol: normalizedSymbol,
+        quote: {
+          currentPrice: fallbackCompany.currentPrice,
+          previousClose: fallbackCompany.previousClose,
+          open: fallbackCompany.open,
+          high: fallbackCompany.high,
+          low: fallbackCompany.low,
+          volume: fallbackCompany.volume,
+          change: fallbackCompany.currentPrice - fallbackCompany.previousClose,
+          changePercent: ((fallbackCompany.currentPrice - fallbackCompany.previousClose) / fallbackCompany.previousClose) * 100,
+          marketState: 'REGULAR',
+        },
+        company: {
+          name: fallbackCompany.companyName,
+          exchange: fallbackCompany.exchange,
+          sector: fallbackCompany.sector,
+          industry: fallbackCompany.industry,
+          website: fallbackCompany.website,
+          longBusinessSummary: fallbackCompany.longBusinessSummary,
+          marketCap: fallbackCompany.marketCap,
+          fullTimeEmployees: fallbackCompany.fullTimeEmployees,
+          currency: fallbackCompany.currency,
+        },
+        summary: {},
+      });
+    }
+
+    return getYahooError(error);
+  }
 }
 
 async function searchStocks(query) {
@@ -359,28 +663,67 @@ async function getCompanyDetails(symbol) {
   }
 
   try {
-    const quote = await yahooFinance.quote(normalizedSymbol);
-    const company = transformCompanyResponse(quote);
-    if (!company) {
-      const fallbackCompany = getFallbackStockEntry(normalizedSymbol);
-      if (fallbackCompany) {
-        return {
-          symbol: fallbackCompany.symbol,
-          name: fallbackCompany.companyName,
-          exchange: fallbackCompany.exchange,
-          sector: fallbackCompany.sector,
-          industry: fallbackCompany.industry,
-          country: fallbackCompany.country,
-          website: fallbackCompany.website,
-          longBusinessSummary: fallbackCompany.longBusinessSummary,
-          marketCap: fallbackCompany.marketCap,
-          fullTimeEmployees: fallbackCompany.fullTimeEmployees,
-          logo: '',
-          currency: fallbackCompany.currency,
-        };
-      }
+    // Fetch quote and summary to gather more detailed company metadata
+    const [quotePayload, summaryPayload] = await Promise.all([
+      yahooFinance.quote(normalizedSymbol),
+      yahooFinance.quoteSummary(normalizedSymbol, { modules: ['summaryProfile', 'defaultKeyStatistics', 'financialData'] }).catch(() => ({})),
+    ]);
 
-      throw new AppError('Company not found', 404);
+    const companyFromQuote = transformCompanyResponse(quotePayload) || {};
+    const summary = summaryPayload?.quoteSummary?.result?.[0] || {};
+
+    const company = {
+      symbol: companyFromQuote.symbol || normalizedSymbol,
+      name: companyFromQuote.name || summary?.summaryProfile?.longName || companyFromQuote.symbol || normalizedSymbol,
+      exchange: companyFromQuote.exchange || quotePayload?.exchange || null,
+      sector: companyFromQuote.sector || summary?.summaryProfile?.sector || null,
+      industry: companyFromQuote.industry || summary?.summaryProfile?.industry || null,
+      country: companyFromQuote.country || summary?.summaryProfile?.country || null,
+      website: companyFromQuote.website || summary?.summaryProfile?.website || null,
+      longBusinessSummary: companyFromQuote.longBusinessSummary || summary?.summaryProfile?.longBusinessSummary || '',
+      marketCap: quotePayload?.marketCap ?? summary?.defaultKeyStatistics?.marketCap ?? null,
+      enterpriseValue: summary?.defaultKeyStatistics?.enterpriseValue ?? null,
+      fullTimeEmployees: companyFromQuote.fullTimeEmployees || summary?.summaryProfile?.fullTimeEmployees || null,
+      logo: companyFromQuote.logo || null,
+      currency: companyFromQuote.currency || quotePayload?.currency || 'USD',
+      peRatio: summary?.defaultKeyStatistics?.trailingPE ?? quotePayload?.trailingPE ?? null,
+      eps: summary?.defaultKeyStatistics?.trailingEps ?? null,
+      beta: summary?.defaultKeyStatistics?.beta ?? null,
+      dividendYield: summary?.defaultKeyStatistics?.dividendYield ?? null,
+      bookValue: summary?.defaultKeyStatistics?.bookValue ?? null,
+      faceValue: summary?.defaultKeyStatistics?.faceValue ?? null,
+      fiftyTwoWeekHigh: quotePayload?.fiftyTwoWeekHigh ?? summary?.summaryDetail?.fiftyTwoWeekHigh ?? null,
+      fiftyTwoWeekLow: quotePayload?.fiftyTwoWeekLow ?? summary?.summaryDetail?.fiftyTwoWeekLow ?? null,
+      currentPrice: quotePayload?.regularMarketPrice ?? quotePayload?.currentPrice ?? null,
+      dayChange: quotePayload?.change ?? null,
+      dayChangePercent: quotePayload?.changePercent ?? null,
+      volume: quotePayload?.volume ?? null,
+      indexMembership: summary?.summaryProfile?.index ?? null,
+    };
+
+    const headerPayload = buildCompanyHeaderPayload(company);
+
+    if (!headerPayload.logo && company.website) {
+      try {
+        const url = new URL(company.website);
+        const domain = url.hostname.replace(/^www\./, '');
+        headerPayload.logo = `https://logo.clearbit.com/${domain}`;
+      } catch (e) {
+        // ignore invalid urls
+      }
+    }
+
+    return headerPayload;
+
+    // If logo missing but website available, attempt Clearbit logo by domain
+    if (!company.logo && company.website) {
+      try {
+        const url = new URL(company.website);
+        const domain = url.hostname.replace(/^www\./, '');
+        company.logo = `https://logo.clearbit.com/${domain}`;
+      } catch (e) {
+        // ignore invalid urls
+      }
     }
 
     return company;
@@ -391,7 +734,7 @@ async function getCompanyDetails(symbol) {
 
     const fallbackCompany = getFallbackStockEntry(normalizedSymbol);
     if (fallbackCompany) {
-      return {
+      return buildCompanyHeaderPayload({
         symbol: fallbackCompany.symbol,
         name: fallbackCompany.companyName,
         exchange: fallbackCompany.exchange,
@@ -399,12 +742,14 @@ async function getCompanyDetails(symbol) {
         industry: fallbackCompany.industry,
         country: fallbackCompany.country,
         website: fallbackCompany.website,
-        longBusinessSummary: fallbackCompany.longBusinessSummary,
         marketCap: fallbackCompany.marketCap,
-        fullTimeEmployees: fallbackCompany.fullTimeEmployees,
-        logo: '',
+        currentPrice: fallbackCompany.currentPrice,
+        dayChange: fallbackCompany.currentPrice - fallbackCompany.previousClose,
+        dayChangePercent: ((fallbackCompany.currentPrice - fallbackCompany.previousClose) / fallbackCompany.previousClose) * 100,
+        volume: fallbackCompany.volume,
         currency: fallbackCompany.currency,
-      };
+        logo: null,
+      });
     }
 
     return getYahooError(error);
@@ -494,7 +839,8 @@ function buildFallbackChartData(symbol) {
 
 async function getStockChart(symbol, options = {}) {
   const normalizedSymbol = normalizeSymbol(symbol);
-  const requestedRange = String(options.range || options.interval || '1M').trim().toUpperCase();
+  const requestedRange = String(options.range || '1M').trim().toUpperCase();
+  const requestedInterval = String(options.interval || '').trim();
   const range = normalizeRange(requestedRange);
 
   if (!normalizedSymbol) {
@@ -502,11 +848,15 @@ async function getStockChart(symbol, options = {}) {
   }
 
   try {
-    const requestConfig = buildHistoricalRequestConfig(requestedRange);
-    const history = await yahooFinance.historical(normalizedSymbol, requestConfig);
+    const requestConfig = buildHistoricalRequestConfig(requestedRange, requestedInterval);
+    const chartResult = await yahooFinance.chart(normalizedSymbol, {
+      period1: requestConfig.period1,
+      period2: requestConfig.period2,
+      interval: requestConfig.interval,
+    });
 
-    const bars = Array.isArray(history) ? history : [];
-    const transformedBars = transformChartResponse(bars.map((entry) => ({
+    const quotes = Array.isArray(chartResult?.quotes) ? chartResult.quotes : [];
+    const transformedBars = transformChartResponse(quotes.map((entry) => ({
       date: entry.date,
       open: entry.open,
       high: entry.high,
@@ -518,6 +868,7 @@ async function getStockChart(symbol, options = {}) {
     return {
       symbol: normalizedSymbol,
       range: requestedRange,
+      interval: requestConfig.interval,
       data: transformedBars,
     };
   } catch (error) {
@@ -539,8 +890,11 @@ module.exports = {
   normalizeInterval,
   buildHistoricalRequestConfig,
   buildStockErrorPayload,
+  buildCompanyHeaderPayload,
   transformSearchResponse,
   normalizeSearchPayload,
+  buildCompanyHubData,
+  getCompanyHubData,
   searchStocks,
   getCompanyDetails,
   getStockQuote,

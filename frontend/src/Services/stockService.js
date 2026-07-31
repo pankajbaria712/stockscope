@@ -13,20 +13,48 @@ export async function searchStocks(query) {
   return response.data;
 }
 
-export async function getCompanyDetails(symbol) {
-  const response = await stockApi.get(`/company/${encodeURIComponent(symbol)}`);
+export async function getCompanyDetails(symbol, options = {}) {
+  const config = {};
+  if (options.signal) {
+    config.signal = options.signal;
+  }
+
+  const response = await stockApi.get(`/company/${encodeURIComponent(symbol)}`, config);
   return response.data;
 }
 
-export async function getStockQuote(symbol) {
-  const response = await stockApi.get(`/quote/${encodeURIComponent(symbol)}`);
+export async function getStockQuote(symbol, options = {}) {
+  const config = {};
+  if (options.signal) {
+    config.signal = options.signal;
+  }
+
+  const response = await stockApi.get(`/quote/${encodeURIComponent(symbol)}`, config);
   return response.data;
 }
 
 export async function getStockChart(symbol, options = {}) {
-  const response = await stockApi.get(`/chart/${encodeURIComponent(symbol)}`, {
-    params: options,
-  });
+  const config = {
+    params: {
+      ...(options.range ? { range: options.range } : {}),
+      ...(options.interval ? { interval: options.interval } : {}),
+    },
+  };
+  if (options.signal) {
+    config.signal = options.signal;
+  }
 
+  const response = await stockApi.get(`/chart/${encodeURIComponent(symbol)}`, config);
+
+  return response.data;
+}
+
+export async function getCompanyHubData(symbol, options = {}) {
+  const config = {};
+  if (options.signal) {
+    config.signal = options.signal;
+  }
+
+  const response = await stockApi.get(`/company/${encodeURIComponent(symbol)}/hub`, config);
   return response.data;
 }

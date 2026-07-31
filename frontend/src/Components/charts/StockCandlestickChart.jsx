@@ -12,7 +12,7 @@ function normalizeChartData(data = []) {
           high: Number(item.high),
           low: Number(item.low),
           close: Number(item.close),
-          volume: Number(item.volume ?? 0) || 0,
+          volume: Number(item.volume ?? 0),
         }))
     : [];
 }
@@ -81,11 +81,6 @@ function StockCandlestickChart({ data = [], symbol = '', isLoading = false, erro
       borderVisible: false,
       wickUpColor: '#22c55e',
       wickDownColor: '#ef4444',
-      priceFormat: {
-        type: 'price',
-        precision: 2,
-        minMove: 0.01,
-      },
     });
 
     const volumeSeries = chart.addSeries(HistogramSeries, {
