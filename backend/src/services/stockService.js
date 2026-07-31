@@ -448,37 +448,41 @@ function getYahooError(error) {
 
 function buildCompanyHubData({ symbol, quote, company, summary = {} }) {
   const companyOfficers = company?.companyOfficers || summary?.summaryProfile?.companyOfficers || [];
+  const summaryProfile = summary?.summaryProfile || {};
+  const defaultKeyStatistics = summary?.defaultKeyStatistics || {};
+  const financialData = summary?.financialData || {};
   const overview = {
     companyName: company?.name || company?.companyName || 'Unknown company',
     symbol: symbol || quote?.symbol || 'N/A',
     logo: company?.logo || '',
-    exchange: company?.exchange || 'N/A',
-    sector: company?.sector || 'N/A',
-    industry: company?.industry || 'N/A',
-    headquarters: company?.city || company?.address1 || 'N/A',
-    ceo: company?.ceo || companyOfficers?.[0]?.name || summary?.summaryProfile?.companyOfficers?.[0]?.name || 'N/A',
+    exchange: company?.exchange || quote?.exchange || 'N/A',
+    sector: company?.sector || summaryProfile?.sector || 'N/A',
+    industry: company?.industry || summaryProfile?.industry || 'N/A',
+    headquarters: [summaryProfile?.city, summaryProfile?.state, summaryProfile?.country].filter(Boolean).join(', ') || company?.city || company?.address1 || 'N/A',
+    ceo: company?.ceo || companyOfficers?.[0]?.name || summaryProfile?.companyOfficers?.[0]?.name || 'N/A',
     foundedYear: company?.foundedYear || 'N/A',
-    employees: company?.fullTimeEmployees || company?.employees || summary?.summaryProfile?.fullTimeEmployees || 'N/A',
-    website: company?.website || '',
+    employees: company?.fullTimeEmployees || company?.employees || summaryProfile?.fullTimeEmployees || 'N/A',
+    website: company?.website || summaryProfile?.website || '',
     marketCap: company?.marketCap || quote?.marketCap || null,
-    enterpriseValue: summary?.defaultKeyStatistics?.enterpriseValue || null,
-    peRatio: summary?.defaultKeyStatistics?.trailingPE || null,
-    forwardPe: summary?.defaultKeyStatistics?.forwardPE || null,
-    eps: summary?.defaultKeyStatistics?.trailingEps || null,
-    bookValue: summary?.defaultKeyStatistics?.bookValue || null,
-    priceToBook: summary?.defaultKeyStatistics?.priceToBook || null,
-    dividendYield: summary?.defaultKeyStatistics?.dividendYield || null,
-    faceValue: summary?.defaultKeyStatistics?.faceValue || null,
-    beta: summary?.defaultKeyStatistics?.beta || null,
-    roe: summary?.financialData?.returnOnEquity || null,
-    roce: summary?.financialData?.returnOnAssets || null,
-    debtToEquity: summary?.financialData?.debtToEquity || null,
-    cashFlow: summary?.financialData?.operatingCashflow || null,
-    revenue: summary?.financialData?.totalRevenue || null,
-    netIncome: summary?.financialData?.netIncomeToCommon || null,
-    profitMargin: summary?.financialData?.profitMargins || null,
-    sharesOutstanding: summary?.defaultKeyStatistics?.sharesOutstanding || null,
-    description: company?.longBusinessSummary || company?.description || summary?.summaryProfile?.longBusinessSummary || '',
+    enterpriseValue: defaultKeyStatistics?.enterpriseValue || null,
+    peRatio: quote?.peRatio || defaultKeyStatistics?.trailingPE || null,
+    forwardPe: quote?.forwardPe || defaultKeyStatistics?.forwardPE || null,
+    eps: quote?.eps || defaultKeyStatistics?.trailingEps || null,
+    bookValue: quote?.bookValue || defaultKeyStatistics?.bookValue || null,
+    priceToBook: quote?.priceToBook || defaultKeyStatistics?.priceToBook || null,
+    dividendYield: quote?.dividendYield || defaultKeyStatistics?.dividendYield || null,
+    faceValue: defaultKeyStatistics?.faceValue || null,
+    beta: quote?.beta || defaultKeyStatistics?.beta || null,
+    roe: financialData?.returnOnEquity || null,
+    roce: financialData?.returnOnAssets || null,
+    debtToEquity: financialData?.debtToEquity || null,
+    cashFlow: financialData?.operatingCashflow || null,
+    revenue: financialData?.totalRevenue || null,
+    netIncome: defaultKeyStatistics?.netIncomeToCommon || null,
+    profitMargin: financialData?.profitMargins || null,
+    sharesOutstanding: quote?.sharesOutstanding || defaultKeyStatistics?.sharesOutstanding || null,
+    description: company?.longBusinessSummary || company?.description || summaryProfile?.longBusinessSummary || '',
+    currency: quote?.currency || company?.currency || 'USD',
   };
 
   const technical = {
@@ -563,14 +567,50 @@ async function getCompanyHubData(symbol) {
 
     const company = transformCompanyResponse(quotePayload);
     const quote = transformQuoteResponse(quotePayload);
-    const summary = summaryPayload?.quoteSummary?.result?.[0] || {};
+    const summary = summaryPayload || {};
+    const summaryProfile = summary?.summaryProfile || {};
+    const financialData = summary?.financialData || {};
+    const defaultKeyStatistics = summary?.defaultKeyStatistics || {};
+
+    const enrichedQuote = {
+      ...quote,
+      exchange: quotePayload?.exchange || quote?.exchange || null,
+      sector: summaryProfile?.sector || quotePayload?.sector || company?.sector || null,
+      industry: summaryProfile?.industry || quotePayload?.industry || company?.industry || null,
+      currency: quotePayload?.currency || quote?.currency || 'USD',
+      website: summaryProfile?.website || quotePayload?.website || company?.website || '',
+      marketCap: quotePayload?.marketCap ?? quote?.marketCap ?? null,
+      sharesOutstanding: quotePayload?.sharesOutstanding ?? defaultKeyStatistics?.sharesOutstanding ?? null,
+      bookValue: quotePayload?.bookValue ?? defaultKeyStatistics?.bookValue ?? null,
+      peRatio: quotePayload?.trailingPE ?? defaultKeyStatistics?.trailingPE ?? null,
+      eps: quotePayload?.trailingEps ?? defaultKeyStatistics?.trailingEps ?? null,
+      beta: quotePayload?.beta ?? defaultKeyStatistics?.beta ?? null,
+      dividendYield: quotePayload?.dividendYield ?? defaultKeyStatistics?.dividendYield ?? null,
+      priceToBook: quotePayload?.priceToBook ?? defaultKeyStatistics?.priceToBook ?? null,
+      forwardPe: quotePayload?.forwardPE ?? defaultKeyStatistics?.forwardPE ?? null,
+      enterpriseValue: defaultKeyStatistics?.enterpriseValue ?? null,
+      roe: financialData?.returnOnEquity ?? null,
+      roce: financialData?.returnOnAssets ?? null,
+      debtToEquity: financialData?.debtToEquity ?? null,
+      cashFlow: financialData?.operatingCashflow ?? null,
+      revenue: financialData?.totalRevenue ?? null,
+      netIncome: defaultKeyStatistics?.netIncomeToCommon ?? null,
+      profitMargin: financialData?.profitMargins ?? null,
+      fullTimeEmployees: summaryProfile?.fullTimeEmployees || quotePayload?.fullTimeEmployees || null,
+      longBusinessSummary: summaryProfile?.longBusinessSummary || company?.longBusinessSummary || '',
+      address1: summaryProfile?.address1 || null,
+      city: summaryProfile?.city || null,
+      state: summaryProfile?.state || null,
+      country: summaryProfile?.country || quotePayload?.country || company?.country || null,
+    };
 
     return buildCompanyHubData({
       symbol: normalizedSymbol,
-      quote,
+      quote: enrichedQuote,
       company: {
         ...(company || {}),
-        ...(summary.summaryProfile || {}),
+        ...(summaryProfile || {}),
+        ...(enrichedQuote || {}),
       },
       summary,
     });

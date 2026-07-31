@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Sparkles, TrendingUp } from 'lucide-react';
-import { getCompanyDetails } from '../../../Services/stockService';
+import { Sparkles, TrendingUp, Plus, Check } from 'lucide-react';
+import { getCompanyDetails, addToWatchlist } from '../../../Services/stockService';
+import { useAuth } from '../../../Context/AuthContext';
 
 function formatPrice(value, currency = 'USD') {
   if (value == null) return 'N/A';
@@ -59,10 +60,12 @@ function deriveMarketCapCategory(marketCap) {
 
 export default function CompanyHeader() {
   const { symbol } = useParams();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [company, setCompany] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [logoError, setLogoError] = useState(false);
+  const [watchlistState, setWatchlistState] = useState({ loading: false, success: '', error: '' });
 
   useEffect(() => {
     let mounted = true;
@@ -121,6 +124,35 @@ export default function CompanyHeader() {
     { label: '52W High', value: formatPrice(fiftyTwoWeekHigh, currency) },
     { label: '52W Low', value: formatPrice(fiftyTwoWeekLow, currency) },
   ], [currency, currentPrice, fiftyTwoWeekHigh, fiftyTwoWeekLow, marketCap]);
+
+  const handleAddToWatchlist = async () => {
+    if (!isAuthenticated) {
+      setWatchlistState({ loading: false, success: '', error: 'Please sign in to save this company.' });
+      return;
+    }
+
+    setWatchlistState({ loading: true, success: '', error: '' });
+
+    try {
+      const payload = {
+        symbol: company?.symbol || symbol,
+        companyName: company?.name || companyName,
+        exchange: company?.exchange || null,
+        sector: company?.sector || null,
+        industry: company?.industry || null,
+        currency: company?.currency || currency,
+        website: company?.website || null,
+        marketCap: company?.marketCap ?? null,
+        currentPrice: company?.currentPrice ?? null,
+      };
+
+      await addToWatchlist(payload);
+      setWatchlistState({ loading: false, success: 'Saved to your watchlist.', error: '' });
+    } catch (err) {
+      const message = err?.response?.data?.message || err?.message || 'Unable to save this company.';
+      setWatchlistState({ loading: false, success: '', error: message });
+    }
+  };
 
   if (loading) {
     return (
@@ -181,7 +213,26 @@ export default function CompanyHeader() {
                   {badge}
                 </span>
               ))}
+              {!authLoading && isAuthenticated ? (
+                <button
+                  type="button"
+                  className="company-badge company-badge--action"
+                  onClick={handleAddToWatchlist}
+                  disabled={watchlistState.loading}
+                >
+                  {watchlistState.loading ? 'Saving…' : (
+                    watchlistState.success ? <><Check size={14} /> Saved</> : <><Plus size={14} /> Add to Watchlist</>
+                  )}
+                </button>
+              ) : null}
             </div>
+
+            {watchlistState.error ? (
+              <p className="company-header-feedback company-header-feedback--error">{watchlistState.error}</p>
+            ) : null}
+            {watchlistState.success ? (
+              <p className="company-header-feedback company-header-feedback--success">{watchlistState.success}</p>
+            ) : null}
 
           </div>
         </div>
