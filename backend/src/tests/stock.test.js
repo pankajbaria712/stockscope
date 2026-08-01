@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { normalizeSymbol, normalizeInterval, normalizeRange, buildHistoricalRequestConfig, buildStockErrorPayload, transformSearchResponse, buildCompanyHeaderPayload } = require('../services/stockService');
+const { normalizeSymbol, normalizeInterval, normalizeRange, buildHistoricalRequestConfig, buildStockErrorPayload, transformSearchResponse, buildCompanyHeaderPayload, buildTechnicalAnalysisPayload } = require('../services/stockService');
 
 test('normalizeSymbol trims and uppercases ticker values', () => {
   assert.equal(normalizeSymbol(' aapl '), 'AAPL');
@@ -88,4 +88,26 @@ test('buildCompanyHeaderPayload normalizes header values and derives market cap 
   assert.equal(payload.currentPrice, 190.45);
   assert.equal(payload.beta, 1.28);
   assert.equal(payload.logo, null);
+});
+
+test('buildTechnicalAnalysisPayload creates a structured technical analysis view from price history', () => {
+  const history = Array.from({ length: 80 }, (_, index) => ({
+    close: 100 + index * 0.35 + (index % 5 === 0 ? 1.8 : 0),
+  }));
+
+  const payload = buildTechnicalAnalysisPayload({
+    currentPrice: 127.4,
+    fiftyTwoWeekHigh: 140,
+    fiftyTwoWeekLow: 90,
+    averageVolume: 14500000,
+    volume: 12000000,
+  }, { data: history });
+
+  assert.equal(payload.overallSignal, 'Buy');
+  assert.equal(payload.indicators.length > 0, true);
+  assert.equal(payload.indicators.some((indicator) => indicator.key === 'rsi'), true);
+  assert.equal(payload.movingAverages[0].indicator, 'SMA 20');
+  assert.equal(payload.priceLevels.currentPrice, 127.4);
+  assert.ok(payload.priceLevels.support1 != null);
+  assert.ok(payload.priceLevels.resistance1 != null);
 });

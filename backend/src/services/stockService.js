@@ -415,6 +415,23 @@ function formatCurrencyValue(value) {
   return `$${amount.toFixed(2)}`;
 }
 
+function formatNumericValue(value, digits = 2) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return 'N/A';
+  }
+
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return 'N/A';
+  }
+
+  if (numericValue >= 1e6) {
+    return `${(numericValue / 1e6).toFixed(digits)}M`;
+  }
+
+  return numericValue.toFixed(digits);
+}
+
 function formatPercent(value) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
     return 'N/A';
@@ -446,7 +463,314 @@ function getYahooError(error) {
   throw new AppError('Unable to fetch stock data', 502);
 }
 
-function buildCompanyHubData({ symbol, quote, company, summary = {} }) {
+function calculateSMA(values, period) {
+  if (!Array.isArray(values) || values.length < period) {
+    return null;
+  }
+
+  const window = values.slice(-period);
+  const total = window.reduce((sum, value) => sum + Number(value), 0);
+  return total / window.length;
+}
+
+function calculateEMA(values, period) {
+  if (!Array.isArray(values) || values.length === 0) {
+    return null;
+  }
+
+  const multiplier = 2 / (period + 1);
+  let ema = Number(values[0]);
+  values.slice(1).forEach((value) => {
+    ema = (Number(value) * multiplier) + (ema * (1 - multiplier));
+  });
+
+  return ema;
+}
+
+function calculateRSI(values, period = 14) {
+  if (!Array.isArray(values) || values.length < period + 1) {
+    return null;
+  }
+
+  const changes = [];
+  for (let index = 1; index < values.length; index += 1) {
+    changes.push(Number(values[index]) - Number(values[index - 1]));
+  }
+
+  const gains = changes.map((change) => (change > 0 ? change : 0));
+  const losses = changes.map((change) => (change < 0 ? Math.abs(change) : 0));
+
+  const averageGain = gains.slice(-period).reduce((sum, value) => sum + value, 0) / period;
+  const averageLoss = losses.slice(-period).reduce((sum, value) => sum + value, 0) / period;
+
+  if (averageLoss === 0) {
+    return 100;
+  }
+
+  const relativeStrength = averageGain / averageLoss;
+  return 100 - (100 / (1 + relativeStrength));
+}
+
+function calculateMACD(values, fastPeriod = 12, slowPeriod = 26, signalPeriod = 9) {
+  if (!Array.isArray(values) || values.length < slowPeriod + signalPeriod) {
+    return { macd: null, signalLine: null };
+  }
+
+  const fastEMA = calculateEMA(values, fastPeriod);
+  const slowEMA = calculateEMA(values, slowPeriod);
+  const macd = fastEMA - slowEMA;
+
+  const signalSeries = values.map((_, index) => {
+    if (index < slowPeriod) {
+      return null;
+    }
+    const slice = values.slice(0, index + 1);
+    const ema = calculateEMA(slice, signalPeriod);
+    return ema;
+  }).filter((value) => value !== null);
+
+  const signalLine = signalSeries.length ? signalSeries[signalSeries.length - 1] : null;
+  return { macd, signalLine };
+}
+
+function calculateBollingerBands(values, period = 20) {
+  if (!Array.isArray(values) || values.length < period) {
+    return { middleBand: null, upperBand: null, lowerBand: null };
+  }
+
+  const recentValues = values.slice(-period);
+  const average = recentValues.reduce((sum, value) => sum + Number(value), 0) / recentValues.length;
+  const variance = recentValues.reduce((sum, value) => sum + Math.pow(Number(value) - average, 2), 0) / recentValues.length;
+  const stdDev = Math.sqrt(variance);
+
+  return {
+    middleBand: average,
+    upperBand: average + (2 * stdDev),
+    lowerBand: average - (2 * stdDev),
+  };
+}
+
+function calculateSupportAndResistance(values) {
+  if (!Array.isArray(values) || values.length === 0) {
+    return { support1: null, support2: null, resistance1: null, resistance2: null };
+  }
+
+  const sortedValues = [...values].sort((a, b) => a - b);
+  const lowest = sortedValues[0];
+  const secondLowest = sortedValues[1] || lowest;
+  const highest = sortedValues[sortedValues.length - 1];
+  const secondHighest = sortedValues[sortedValues.length - 2] || highest;
+
+  return {
+    support1: lowest,
+    support2: secondLowest,
+    resistance1: highest,
+    resistance2: secondHighest,
+  };
+}
+
+function resolveSignalTone(status) {
+  if (status === 'Bullish') {
+    return 'positive';
+  }
+
+  if (status === 'Bearish') {
+    return 'negative';
+  }
+
+  return 'neutral';
+}
+
+function buildTechnicalAnalysisPayload(quote = {}, chart = {}) {
+  const history = Array.isArray(chart?.data) ? chart.data : [];
+  const closes = history.map((entry) => Number(entry.close)).filter((value) => Number.isFinite(value));
+  const highs = history.map((entry) => Number(entry.high)).filter((value) => Number.isFinite(value));
+  const lows = history.map((entry) => Number(entry.low)).filter((value) => Number.isFinite(value));
+  const currentPrice = Number(quote.currentPrice ?? quote.regularMarketPrice ?? quote.price ?? closes[closes.length - 1] ?? null);
+  const currentClose = Number.isFinite(currentPrice) ? currentPrice : (closes[closes.length - 1] ?? null);
+  const fiveTwoWeekHigh = Number(quote.fiftyTwoWeekHigh ?? quote.week52High ?? null);
+  const fiveTwoWeekLow = Number(quote.fiftyTwoWeekLow ?? quote.week52Low ?? null);
+  const averageVolume = Number(quote.averageVolume ?? quote.volume ?? null);
+  const sma20 = calculateSMA(closes, 20);
+  const sma50 = calculateSMA(closes, 50);
+  const sma200 = calculateSMA(closes, 200);
+  const ema20 = calculateEMA(closes, 20);
+  const ema50 = calculateEMA(closes, 50);
+  const rsi = calculateRSI(closes, 14);
+  const { macd, signalLine } = calculateMACD(closes);
+  const { middleBand, upperBand, lowerBand } = calculateBollingerBands(closes, 20);
+  const { support1, support2, resistance1, resistance2 } = calculateSupportAndResistance(lows.length ? lows : closes);
+
+  const priceLevels = {
+    support1: support1 ?? (currentClose ? currentClose * 0.95 : null),
+    support2: support2 ?? (currentClose ? currentClose * 0.90 : null),
+    resistance1: resistance1 ?? (currentClose ? currentClose * 1.05 : null),
+    resistance2: resistance2 ?? (currentClose ? currentClose * 1.10 : null),
+    currentPrice: currentClose,
+  };
+
+  const indicators = [
+    {
+      key: 'current-trend',
+      label: 'Current Trend',
+      value: currentClose != null && quote?.change != null ? (quote.change >= 0 ? 'Bullish' : 'Bearish') : 'Neutral',
+      displayValue: currentClose != null && quote?.change != null ? (quote.change >= 0 ? 'Bullish' : 'Bearish') : 'Neutral',
+      status: currentClose != null && quote?.change != null ? (quote.change >= 0 ? 'Bullish' : 'Bearish') : 'Neutral',
+      description: currentClose != null && quote?.change != null ? (quote.change >= 0 ? 'The recent price movement is constructive and momentum is leaning positive.' : 'The recent price movement is leaning negative and caution is warranted.') : 'The latest price trend is not yet available.',
+      tone: currentClose != null && quote?.change != null ? (quote.change >= 0 ? 'positive' : 'negative') : 'neutral',
+    },
+    {
+      key: 'rsi',
+      label: 'RSI (14)',
+      value: rsi,
+      displayValue: rsi == null ? 'N/A' : `${Number(rsi).toFixed(2)}`,
+      status: rsi == null ? 'Neutral' : rsi >= 70 ? 'Bearish' : rsi <= 30 ? 'Bullish' : rsi >= 55 ? 'Bullish' : rsi <= 45 ? 'Bearish' : 'Neutral',
+      description: rsi == null ? 'RSI data is not yet available for this symbol.' : rsi >= 70 ? 'Momentum is stretched and a pullback is possible.' : rsi <= 30 ? 'Momentum is oversold and a rebound could follow.' : rsi >= 55 ? 'Momentum is strengthening and the trend remains constructive.' : rsi <= 45 ? 'Momentum is softening and downside pressure is building.' : 'Momentum is balanced and the trend is stable.',
+      tone: rsi == null ? 'neutral' : rsi >= 70 ? 'negative' : rsi <= 30 ? 'positive' : rsi >= 55 ? 'positive' : rsi <= 45 ? 'negative' : 'neutral',
+    },
+    {
+      key: 'macd',
+      label: 'MACD',
+      value: macd,
+      displayValue: macd == null ? 'N/A' : `${Number(macd).toFixed(2)}`,
+      status: macd == null ? 'Neutral' : macd >= 0 ? 'Bullish' : 'Bearish',
+      description: macd == null ? 'MACD data is unavailable right now.' : macd >= 0 ? 'The MACD line is above the signal line, suggesting upward momentum.' : 'The MACD line is below the signal line, indicating fading momentum.',
+      tone: macd == null ? 'neutral' : macd >= 0 ? 'positive' : 'negative',
+    },
+    {
+      key: 'signal-line',
+      label: 'Signal Line',
+      value: signalLine,
+      displayValue: signalLine == null ? 'N/A' : `${Number(signalLine).toFixed(2)}`,
+      status: signalLine == null ? 'Neutral' : 'Neutral',
+      description: signalLine == null ? 'Signal line data is unavailable right now.' : 'The signal line provides a smoothing reference for the MACD crossover.',
+      tone: 'neutral',
+    },
+    {
+      key: 'sma20',
+      label: 'SMA 20',
+      value: sma20,
+      displayValue: sma20 == null ? 'N/A' : `${Number(sma20).toFixed(2)}`,
+      status: sma20 == null ? 'Neutral' : currentClose && sma20 ? (currentClose > sma20 ? 'Bullish' : 'Bearish') : 'Neutral',
+      description: sma20 == null ? 'Recent moving average data is not available.' : currentClose && sma20 ? (currentClose > sma20 ? 'Price is trading above the short-term moving average.' : 'Price is trading below the short-term moving average.') : 'Short-term trend is stable.',
+      tone: sma20 == null ? 'neutral' : currentClose && sma20 ? (currentClose > sma20 ? 'positive' : 'negative') : 'neutral',
+    },
+    {
+      key: 'sma50',
+      label: 'SMA 50',
+      value: sma50,
+      displayValue: sma50 == null ? 'N/A' : `${Number(sma50).toFixed(2)}`,
+      status: sma50 == null ? 'Neutral' : currentClose && sma50 ? (currentClose > sma50 ? 'Bullish' : 'Bearish') : 'Neutral',
+      description: sma50 == null ? 'Medium-term trend data is not available.' : currentClose && sma50 ? (currentClose > sma50 ? 'Price is above the medium-term trend line.' : 'Price is below the medium-term trend line.') : 'Medium-term trend is stable.',
+      tone: sma50 == null ? 'neutral' : currentClose && sma50 ? (currentClose > sma50 ? 'positive' : 'negative') : 'neutral',
+    },
+    {
+      key: 'sma200',
+      label: 'SMA 200',
+      value: sma200,
+      displayValue: sma200 == null ? 'N/A' : `${Number(sma200).toFixed(2)}`,
+      status: sma200 == null ? 'Neutral' : currentClose && sma200 ? (currentClose > sma200 ? 'Bullish' : 'Bearish') : 'Neutral',
+      description: sma200 == null ? 'Long-term trend data is not available.' : currentClose && sma200 ? (currentClose > sma200 ? 'The stock is trading above its long-term trend line.' : 'The stock is trading below its long-term trend line.') : 'Long-term trend is stable.',
+      tone: sma200 == null ? 'neutral' : currentClose && sma200 ? (currentClose > sma200 ? 'positive' : 'negative') : 'neutral',
+    },
+    {
+      key: 'ema20',
+      label: 'EMA 20',
+      value: ema20,
+      displayValue: ema20 == null ? 'N/A' : `${Number(ema20).toFixed(2)}`,
+      status: ema20 == null ? 'Neutral' : currentClose && ema20 ? (currentClose > ema20 ? 'Bullish' : 'Bearish') : 'Neutral',
+      description: ema20 == null ? 'The 20-day EMA is not available right now.' : currentClose && ema20 ? (currentClose > ema20 ? 'Recent price action is outperforming the short EMA.' : 'Recent price action is lagging the short EMA.') : 'Short-term trend is balanced.',
+      tone: ema20 == null ? 'neutral' : currentClose && ema20 ? (currentClose > ema20 ? 'positive' : 'negative') : 'neutral',
+    },
+    {
+      key: 'ema50',
+      label: 'EMA 50',
+      value: ema50,
+      displayValue: ema50 == null ? 'N/A' : `${Number(ema50).toFixed(2)}`,
+      status: ema50 == null ? 'Neutral' : currentClose && ema50 ? (currentClose > ema50 ? 'Bullish' : 'Bearish') : 'Neutral',
+      description: ema50 == null ? 'The 50-day EMA is not available right now.' : currentClose && ema50 ? (currentClose > ema50 ? 'Recent price action is holding above the medium EMA.' : 'Recent price action is below the medium EMA.') : 'Medium-term trend is balanced.',
+      tone: ema50 == null ? 'neutral' : currentClose && ema50 ? (currentClose > ema50 ? 'positive' : 'negative') : 'neutral',
+    },
+    {
+      key: 'bollinger',
+      label: 'Bollinger Bands',
+      value: { upperBand, middleBand, lowerBand },
+      displayValue: middleBand == null ? 'N/A' : `${Number(lowerBand).toFixed(2)} – ${Number(upperBand).toFixed(2)}`,
+      status: middleBand == null ? 'Neutral' : currentClose && middleBand ? (currentClose > middleBand ? 'Bullish' : 'Bearish') : 'Neutral',
+      description: middleBand == null ? 'Bollinger Bands are not available right now.' : currentClose && middleBand ? (currentClose > middleBand ? 'Price is trading above the middle band, which suggests strength.' : 'Price is trading below the middle band, which suggests weakness.') : 'Volatility remains balanced.',
+      tone: middleBand == null ? 'neutral' : currentClose && middleBand ? (currentClose > middleBand ? 'positive' : 'negative') : 'neutral',
+    },
+    {
+      key: 'fifty-two-week-high',
+      label: '52 Week High',
+      value: fiveTwoWeekHigh,
+      displayValue: fiveTwoWeekHigh == null ? 'N/A' : `${formatNumericValue(fiveTwoWeekHigh)}`,
+      status: fiveTwoWeekHigh == null ? 'Neutral' : currentClose && fiveTwoWeekHigh ? (currentClose >= fiveTwoWeekHigh ? 'Bullish' : 'Neutral') : 'Neutral',
+      description: fiveTwoWeekHigh == null ? 'The 52-week high is not available.' : currentClose && fiveTwoWeekHigh ? (currentClose >= fiveTwoWeekHigh ? 'The price is at or above the yearly high.' : 'The price is still below the yearly high.') : 'The yearly high is currently unavailable.',
+      tone: currentClose && fiveTwoWeekHigh && currentClose >= fiveTwoWeekHigh ? 'positive' : 'neutral',
+    },
+    {
+      key: 'fifty-two-week-low',
+      label: '52 Week Low',
+      value: fiveTwoWeekLow,
+      displayValue: fiveTwoWeekLow == null ? 'N/A' : `${formatNumericValue(fiveTwoWeekLow)}`,
+      status: fiveTwoWeekLow == null ? 'Neutral' : currentClose && fiveTwoWeekLow ? (currentClose <= fiveTwoWeekLow ? 'Bearish' : 'Neutral') : 'Neutral',
+      description: fiveTwoWeekLow == null ? 'The 52-week low is not available.' : currentClose && fiveTwoWeekLow ? (currentClose <= fiveTwoWeekLow ? 'The price is near the yearly low.' : 'The price is above the yearly low.') : 'The yearly low is currently unavailable.',
+      tone: currentClose && fiveTwoWeekLow && currentClose <= fiveTwoWeekLow ? 'negative' : 'neutral',
+    },
+    {
+      key: 'average-volume',
+      label: 'Average Volume',
+      value: averageVolume,
+      displayValue: averageVolume == null ? 'N/A' : `${formatNumericValue(averageVolume)}`,
+      status: averageVolume == null ? 'Neutral' : 'Neutral',
+      description: averageVolume == null ? 'Volume data is unavailable right now.' : 'Average volume indicates how actively the stock is traded.',
+      tone: 'neutral',
+    },
+  ];
+
+  const bullishSignals = [
+    rsi != null && rsi >= 55,
+    macd != null && macd >= 0,
+    sma20 != null && currentClose != null && currentClose > sma20,
+    sma50 != null && currentClose != null && currentClose > sma50,
+    sma200 != null && currentClose != null && currentClose > sma200,
+    ema20 != null && currentClose != null && currentClose > ema20,
+    ema50 != null && currentClose != null && currentClose > ema50,
+  ].filter(Boolean).length;
+
+  const bearishSignals = [
+    rsi != null && rsi <= 45,
+    macd != null && macd < 0,
+    sma20 != null && currentClose != null && currentClose < sma20,
+    sma50 != null && currentClose != null && currentClose < sma50,
+    sma200 != null && currentClose != null && currentClose < sma200,
+    ema20 != null && currentClose != null && currentClose < ema20,
+    ema50 != null && currentClose != null && currentClose < ema50,
+  ].filter(Boolean).length;
+
+  const overallSignal = bullishSignals >= bearishSignals + 2 ? 'Buy' : bearishSignals >= bullishSignals + 2 ? 'Sell' : bullishSignals > bearishSignals ? 'Hold' : 'Hold';
+
+  const movingAverages = [
+    { indicator: 'SMA 20', value: sma20, signal: currentClose != null && sma20 != null ? (currentClose > sma20 ? 'Buy' : 'Sell') : 'Hold' },
+    { indicator: 'SMA 50', value: sma50, signal: currentClose != null && sma50 != null ? (currentClose > sma50 ? 'Buy' : 'Sell') : 'Hold' },
+    { indicator: 'SMA 200', value: sma200, signal: currentClose != null && sma200 != null ? (currentClose > sma200 ? 'Buy' : 'Sell') : 'Hold' },
+    { indicator: 'EMA 20', value: ema20, signal: currentClose != null && ema20 != null ? (currentClose > ema20 ? 'Buy' : 'Sell') : 'Hold' },
+    { indicator: 'EMA 50', value: ema50, signal: currentClose != null && ema50 != null ? (currentClose > ema50 ? 'Buy' : 'Sell') : 'Hold' },
+  ];
+
+  return {
+    overallSignal,
+    summary: currentClose != null && (sma20 != null || sma50 != null)
+      ? `The market structure is ${overallSignal.toLowerCase()} as price action remains ${currentClose > (sma20 || sma50 || currentClose) ? 'above' : 'below'} the key moving averages.`
+      : 'Technical indicators are being evaluated from the latest available price history.',
+    indicators,
+    priceLevels,
+    movingAverages,
+  };
+}
+
+function buildCompanyHubData({ symbol, quote, company, summary = {}, chart = {} }) {
   const companyOfficers = company?.companyOfficers || summary?.summaryProfile?.companyOfficers || [];
   const summaryProfile = summary?.summaryProfile || {};
   const defaultKeyStatistics = summary?.defaultKeyStatistics || {};
@@ -485,7 +809,10 @@ function buildCompanyHubData({ symbol, quote, company, summary = {} }) {
     currency: quote?.currency || company?.currency || 'USD',
   };
 
-  const technical = {
+  const technical = buildTechnicalAnalysisPayload(quote || {}, chart || {});
+  technical.summary = technical.summary || 'Technical indicators are being evaluated from the latest available price history.';
+
+  const summaryTechnical = {
     indicators: [
       { label: 'Current Trend', value: quote?.change >= 0 ? 'Bullish' : 'Bearish', tone: quote?.change >= 0 ? 'positive' : 'negative' },
       { label: 'Moving Average 20', value: quote?.movingAverage20 || 'N/A', tone: 'neutral' },
@@ -507,6 +834,8 @@ function buildCompanyHubData({ symbol, quote, company, summary = {} }) {
       { label: 'Previous Close', value: quote?.previousClose || 'N/A', tone: 'neutral' },
     ],
   };
+
+  technical.summaryTechnical = summaryTechnical;
 
   const financials = {
     metrics: [
@@ -560,9 +889,14 @@ async function getCompanyHubData(symbol) {
   }
 
   try {
-    const [quotePayload, summaryPayload] = await Promise.all([
+    const [quotePayload, summaryPayload, chartPayload] = await Promise.all([
       yahooFinance.quote(normalizedSymbol),
       yahooFinance.quoteSummary(normalizedSymbol, { modules: ['summaryProfile', 'financialData', 'defaultKeyStatistics', 'earnings'] }).catch(() => ({})),
+      yahooFinance.chart(normalizedSymbol, {
+        period1: Math.floor(Date.now() / 1000) - 365 * 24 * 60 * 60,
+        period2: Math.floor(Date.now() / 1000),
+        interval: '1mo',
+      }).catch(() => null),
     ]);
 
     const company = transformCompanyResponse(quotePayload);
@@ -571,6 +905,15 @@ async function getCompanyHubData(symbol) {
     const summaryProfile = summary?.summaryProfile || {};
     const financialData = summary?.financialData || {};
     const defaultKeyStatistics = summary?.defaultKeyStatistics || {};
+
+    const chartData = chartPayload?.quotes ? transformChartResponse(chartPayload.quotes.map((entry) => ({
+      date: entry.date,
+      open: entry.open,
+      high: entry.high,
+      low: entry.low,
+      close: entry.close,
+      volume: entry.volume,
+    }))) : [];
 
     const enrichedQuote = {
       ...quote,
@@ -613,6 +956,7 @@ async function getCompanyHubData(symbol) {
         ...(enrichedQuote || {}),
       },
       summary,
+      chart: { data: chartData },
     });
   } catch (error) {
     if (error instanceof AppError) {
@@ -646,6 +990,7 @@ async function getCompanyHubData(symbol) {
           currency: fallbackCompany.currency,
         },
         summary: {},
+        chart: { data: [] },
       });
     }
 
@@ -931,6 +1276,7 @@ module.exports = {
   buildHistoricalRequestConfig,
   buildStockErrorPayload,
   buildCompanyHeaderPayload,
+  buildTechnicalAnalysisPayload,
   transformSearchResponse,
   normalizeSearchPayload,
   buildCompanyHubData,

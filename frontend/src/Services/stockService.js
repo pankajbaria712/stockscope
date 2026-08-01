@@ -64,3 +64,13 @@ export async function addToWatchlist(payload) {
   const response = await api.post('/watchlist', payload);
   return response.data;
 }
+
+export async function getWatchlist() {
+  const response = await api.get('/watchlist');
+  return response.data;
+}
+
+export async function removeFromWatchlist(symbol) {
+  const response = await api.delete(`/watchlist/${encodeURIComponent(symbol)}`);
+  return response.data;
+}

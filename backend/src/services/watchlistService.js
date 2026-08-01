@@ -93,8 +93,48 @@ async function addCompanyToWatchlist(userId, payload = {}) {
   };
 }
 
+async function getWatchlist(userId) {
+  if (!userId) {
+    throw new AppError('Authentication is required', 401);
+  }
+
+  await ensureWatchlistTableExists();
+
+  const [rows] = await pool.execute(
+    'SELECT id, user_id AS userId, stock_symbol AS stockSymbol, company_name AS companyName, exchange, created_at AS createdAt, updated_at AS updatedAt FROM watchlists WHERE user_id = ? ORDER BY created_at DESC',
+    [userId],
+  );
+
+  return rows;
+}
+
+async function removeFromWatchlist(userId, symbol) {
+  if (!userId) {
+    throw new AppError('Authentication is required', 401);
+  }
+
+  const normalizedSymbol = normalizeSymbol(symbol);
+  if (!normalizedSymbol) {
+    throw new AppError('Please provide a stock symbol', 400);
+  }
+
+  await ensureWatchlistTableExists();
+
+  const [result] = await pool.execute(
+    'DELETE FROM watchlists WHERE user_id = ? AND stock_symbol = ?',
+    [userId, normalizedSymbol],
+  );
+
+  return {
+    removed: result.affectedRows > 0,
+    symbol: normalizedSymbol,
+  };
+}
+
 module.exports = {
   ensureWatchlistTableExists,
   normalizeWatchlistPayload,
   addCompanyToWatchlist,
+  getWatchlist,
+  removeFromWatchlist,
 };

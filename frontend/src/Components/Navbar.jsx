@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
-import { Menu, Search, ArrowRight, UserCircle2, LogOut } from 'lucide-react';
+import { Menu, ArrowRight, UserCircle2, LogOut } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../Context/AuthContext';
 import ThemeToggle from './ThemeToggle';
 
@@ -9,12 +9,14 @@ const navLinks = [
   { label: 'Home', to: '/' },
   { label: 'Markets', to: '/search' },
   { label: 'Compare', to: '/compare' },
+  { label: 'Watchlist', to: '/watchlist' },
   { label: 'About', to: '/about' },
 ];
 
 function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showNavbar, setShowNavbar] = useState(true);
+  const location = useLocation();
 
   useEffect(() => {
     let lastScrollY = window.scrollY;
@@ -51,17 +53,18 @@ function Navbar() {
         </Link>
 
         <nav className="navbar__links" aria-label="Primary navigation">
-          {navLinks.map((link) => (
-            <Link key={link.to} to={link.to} className="nav-link">
-              {link.label}
-            </Link>
-          ))}
+          {navLinks.map((link) => {
+            const isActive = location.pathname === link.to || (link.to !== '/' && location.pathname.startsWith(link.to));
+
+            return (
+              <Link key={link.to} to={link.to} className={`nav-link ${isActive ? 'nav-link--active' : ''}`} aria-current={isActive ? 'page' : undefined}>
+                <span>{link.label}</span>
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="navbar__actions">
-          <button className="icon-button" type="button" aria-label="Search companies">
-            <Search size={18} />
-          </button>
           <ThemeToggle />
 
           {isAuthenticated ? (
@@ -93,11 +96,15 @@ function Navbar() {
 
       {menuOpen ? (
         <div className="mobile-menu">
-          {navLinks.map((link) => (
-            <Link key={link.to} to={link.to} className="mobile-menu__link" onClick={() => setMenuOpen(false)}>
-              {link.label}
-            </Link>
-          ))}
+          {navLinks.map((link) => {
+            const isActive = location.pathname === link.to || (link.to !== '/' && location.pathname.startsWith(link.to));
+
+            return (
+              <Link key={link.to} to={link.to} className={`mobile-menu__link ${isActive ? 'mobile-menu__link--active' : ''}`} aria-current={isActive ? 'page' : undefined} onClick={() => setMenuOpen(false)}>
+                <span>{link.label}</span>
+              </Link>
+            );
+          })}
         </div>
       ) : null}
     </motion.header>
