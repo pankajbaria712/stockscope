@@ -6,14 +6,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 const publicDir = path.join(rootDir, 'public');
-const siteUrl = process.env.VITE_SITE_URL || 'https://stockscope.app';
+const siteUrl = process.env.VITE_SITE_URL || 'https://www.stockscope.app';
 
 const publicRoutes = [
   '/',
-  '/login',
-  '/register',
-  '/watchlist',
-  '/profile',
   '/about',
   '/contact',
   '/privacy-policy',
@@ -31,7 +27,7 @@ const companyRoutes = [
 
 const currentDate = new Date().toISOString();
 
-const robotsContent = `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /private/\nDisallow: /admin/\nSitemap: ${siteUrl}/sitemap.xml\n`;
+const robotsContent = `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /private/\nDisallow: /admin/\nDisallow: /login\nDisallow: /register\nDisallow: /watchlist\nDisallow: /profile\nSitemap: ${siteUrl}/sitemap.xml\n`;
 
 const sitemapContent = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${[...publicRoutes, ...companyRoutes]
   .map((route) => {

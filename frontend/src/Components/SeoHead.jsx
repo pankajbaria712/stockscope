@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 const DEFAULT_TITLE = 'StockScope';
 const DEFAULT_DESCRIPTION = 'StockScope helps investors analyze Indian and US stocks with live prices, interactive charts, company profiles, and personalized watchlists.';
 const DEFAULT_IMAGE = '/logo.png';
-const DEFAULT_SITE_URL = (typeof window !== 'undefined' && window.location.origin) || import.meta.env.VITE_SITE_URL || 'https://stockscope.app';
+const DEFAULT_SITE_URL = (typeof window !== 'undefined' && window.location.origin) || import.meta.env.VITE_SITE_URL || 'https://www.stockscope.app';
 
 function normalizePath(pathname) {
   if (!pathname || pathname === '/') {
